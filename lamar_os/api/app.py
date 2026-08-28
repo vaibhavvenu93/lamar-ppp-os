@@ -22,6 +22,13 @@ from demo.opportunities import (
     build_demo_opportunities,
     opportunity_by_id,
 )
+from lamar_os.agents.document_workflow import (
+    run_document_workflow,
+)
+from lamar_os.api.document import (
+    DocumentIntelligenceResponse,
+    document_intelligence_response,
+)
 from lamar_os.api.opportunity import (
     OpportunityDetailResponse,
     OpportunityPortfolioResponse,
@@ -177,6 +184,63 @@ def opportunity_investigation(
 
     return opportunity_detail(
         opportunity
+    )
+
+
+@app.post(
+    "/api/opportunities/{opportunity_id}/investigate",
+    response_model=DocumentIntelligenceResponse,
+)
+def investigate_opportunity_documents(
+    opportunity_id: str,
+) -> DocumentIntelligenceResponse:
+    """
+    Execute the Document Agent for a supported demo opportunity.
+
+    The current prototype has a synthetic tender package for the
+    Eastern Province Independent Water Project. The workflow converts
+    that package into evidence-backed requirements, obligations,
+    critical dates, risks and clarification questions, and records an
+    inspectable AgentRun in the Project Brain.
+
+    No consequential Bid / No-Bid, contractual, legal or investment
+    decision is made by this endpoint.
+    """
+
+    try:
+        opportunity = opportunity_by_id(
+            opportunity_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    if opportunity.opportunity_id != "OPP-WATER-001":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Document Intelligence is currently implemented "
+                "for the synthetic Eastern Province Independent "
+                "Water Project demo opportunity only."
+            ),
+        )
+
+    analysis, _, agent_run = run_document_workflow()
+
+    if analysis.opportunity_id != opportunity.opportunity_id:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document Agent analysis does not match the "
+                "requested opportunity."
+            ),
+        )
+
+    return document_intelligence_response(
+        analysis=analysis,
+        agent_run=agent_run,
     )
 
 
