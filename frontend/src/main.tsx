@@ -7,6 +7,7 @@ import "./document-intelligence.css";
 import "./bid-intelligence.css";
 import "./project-brain-entry.css";
 import "./deal-room.css";
+import "./causal-trace.css";
 
 const rootElement = document.getElementById("root");
 
