@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from lamar_os.domain.bid import (
     BidDecision,
     BidFactor,
@@ -10,6 +12,16 @@ from lamar_os.domain.bid import (
     BidRecommendation,
     BidStrength,
     BidWorkstream,
+)
+from lamar_os.domain.project import (
+    AgentRun,
+    AgentRunStatus,
+    ApprovalStatus,
+    ProjectBrain,
+    ProjectRecord,
+    ProjectRecordType,
+    RecordSource,
+    RecordStatus,
 )
 
 
@@ -138,9 +150,265 @@ def determine_recommendation(
     )
 
 
+def write_bid_decision_to_project_brain(
+    decision: BidDecision,
+    brain: ProjectBrain,
+) -> AgentRun:
+    """
+    Persist deterministic Bid Agent output into shared project state.
+
+    The Bid Agent remains a recommendation system. Writing its
+    recommendation into the Project Brain does not constitute human
+    Bid / No-Bid approval.
+    """
+
+    if brain.project_id != decision.project_id:
+        raise ValueError(
+            "Bid decision belongs to a different Project Brain."
+        )
+
+    now = datetime.utcnow()
+
+    for issue in decision.issues:
+        related_record_ids = [
+            *issue.evidence_ids,
+        ]
+
+        brain.upsert_record(
+            ProjectRecord(
+                record_id=issue.issue_id,
+                project_id=decision.project_id,
+                record_type=ProjectRecordType.BID_ISSUE,
+                title=issue.title,
+                summary=issue.description,
+                source=RecordSource.AGENT,
+                source_reference="Bid Agent",
+                payload={
+                    "issue_type": issue.issue_type.value,
+                    "severity": issue.severity.value,
+                    "blocking": issue.blocking,
+                    "estimated_exposure_usd": (
+                        issue.estimated_exposure_usd
+                    ),
+                    "resolution_required": (
+                        issue.resolution_required
+                    ),
+                },
+                created_by="Bid Agent",
+                status=RecordStatus.OPEN,
+                approval_status=(
+                    ApprovalStatus.PENDING
+                    if issue.blocking
+                    else ApprovalStatus.NOT_REQUIRED
+                ),
+                evidence_ids=list(
+                    issue.evidence_ids
+                ),
+                related_record_ids=related_record_ids,
+                owner=issue.owner,
+                priority=issue.severity.value,
+                tags=[
+                    "BID",
+                    "ISSUE",
+                    issue.issue_type.value,
+                    issue.severity.value,
+                    *(
+                        ["BLOCKER"]
+                        if issue.blocking
+                        else []
+                    ),
+                ],
+            )
+        )
+
+    for workstream in decision.workstreams:
+        brain.upsert_record(
+            ProjectRecord(
+                record_id=workstream.workstream_id,
+                project_id=decision.project_id,
+                record_type=ProjectRecordType.WORKSTREAM,
+                title=workstream.name,
+                summary=workstream.objective,
+                source=RecordSource.AGENT,
+                source_reference="Bid Agent",
+                payload={
+                    "objective": workstream.objective,
+                    "status": workstream.status,
+                    "dependencies": list(
+                        workstream.dependencies
+                    ),
+                },
+                created_by="Bid Agent",
+                status=(
+                    RecordStatus.IN_PROGRESS
+                    if workstream.status
+                    == "IN_PROGRESS"
+                    else RecordStatus.OPEN
+                ),
+                approval_status=(
+                    ApprovalStatus.NOT_REQUIRED
+                ),
+                evidence_ids=list(
+                    workstream.evidence_ids
+                ),
+                related_record_ids=[
+                    *workstream.dependencies,
+                    *workstream.evidence_ids,
+                ],
+                owner=workstream.owner,
+                priority=workstream.priority,
+                tags=[
+                    "BID",
+                    "WORKSTREAM",
+                    workstream.priority,
+                ],
+            )
+        )
+
+    decision_record_id = (
+        f"BID-DECISION-{decision.opportunity_id}"
+    )
+
+    brain.upsert_record(
+        ProjectRecord(
+            record_id=decision_record_id,
+            project_id=decision.project_id,
+            record_type=ProjectRecordType.DECISION,
+            title="Bid Agent pursuit recommendation",
+            summary=decision.executive_thesis,
+            source=RecordSource.AGENT,
+            source_reference="Bid Agent",
+            payload={
+                "opportunity_id": (
+                    decision.opportunity_id
+                ),
+                "recommendation": (
+                    decision.recommendation.value
+                ),
+                "readiness": (
+                    decision.readiness.value
+                ),
+                "readiness_score": (
+                    decision.readiness_score
+                ),
+                "confidence": decision.confidence,
+                "decision_rationale": (
+                    decision.decision_rationale
+                ),
+                "unresolved_blockers": list(
+                    decision.unresolved_blockers
+                ),
+                "clarification_ids": list(
+                    decision.clarification_ids
+                ),
+                "human_approval_required": (
+                    decision.human_approval_required
+                ),
+                "approved": decision.approved,
+            },
+            created_by="Bid Agent",
+            status=RecordStatus.OPEN,
+            approval_status=(
+                ApprovalStatus.PENDING
+                if decision.human_approval_required
+                and not decision.approved
+                else ApprovalStatus.NOT_REQUIRED
+            ),
+            evidence_ids=list(
+                decision.evidence_ids
+            ),
+            related_record_ids=[
+                *[
+                    issue.issue_id
+                    for issue in decision.issues
+                ],
+                *[
+                    workstream.workstream_id
+                    for workstream
+                    in decision.workstreams
+                ],
+                *decision.clarification_ids,
+            ],
+            owner="Investment Committee",
+            priority="HIGH",
+            tags=[
+                "BID",
+                "DECISION",
+                decision.recommendation.value,
+            ],
+        )
+    )
+
+    run_id = (
+        f"AGENT-RUN-BID-{decision.opportunity_id}"
+    )
+
+    existing_run = brain.agent_run_by_id(
+        run_id
+    )
+
+    if existing_run is not None:
+        brain.agent_runs.remove(
+            existing_run
+        )
+
+    output_record_ids = [
+        *[
+            issue.issue_id
+            for issue in decision.issues
+        ],
+        *[
+            workstream.workstream_id
+            for workstream in decision.workstreams
+        ],
+        decision_record_id,
+    ]
+
+    run = AgentRun(
+        run_id=run_id,
+        project_id=decision.project_id,
+        agent_name="Bid Agent",
+        task=(
+            "Evaluate pursuit readiness and convert "
+            "decision gaps into governed Project Brain state."
+        ),
+        status=AgentRunStatus.COMPLETED,
+        input_record_ids=[
+            *decision.clarification_ids,
+            *decision.evidence_ids,
+        ],
+        tools_used=[
+            "deterministic_bid_scoring",
+            "issue_classification",
+            "workstream_generation",
+            "project_brain_writer",
+        ],
+        output_record_ids=output_record_ids,
+        evidence_ids=list(
+            decision.evidence_ids
+        ),
+        summary=(
+            f"{decision.recommendation.value}: "
+            f"{decision.readiness_score:.1f}/100 readiness, "
+            f"{decision.blocking_issue_count} blockers, "
+            f"{len(decision.workstreams)} workstreams."
+        ),
+        started_at=now,
+        completed_at=now,
+        human_review_required=(
+            decision.human_approval_required
+        ),
+    )
+
+    brain.add_agent_run(run)
+
+    return run
+
+
 def run_water_ppp_bid_agent(
     opportunity_id: str = "OPP-WATER-001",
     project_id: str = "DEMO-WATER-001",
+    project_brain: ProjectBrain | None = None,
 ) -> BidDecision:
     """
     Deterministic Bid Agent demonstration for the synthetic
@@ -148,6 +416,10 @@ def run_water_ppp_bid_agent(
 
     The agent reasons over structured opportunity and tender
     intelligence. It does not approve the pursuit decision.
+
+    When a Project Brain is supplied, the resulting issues,
+    workstreams, recommendation, evidence relationships, and
+    agent execution are persisted into shared project state.
     """
 
     factors = [
@@ -517,7 +789,7 @@ def run_water_ppp_bid_agent(
         for evidence_id in record.evidence_ids
     })
 
-    return BidDecision(
+    decision = BidDecision(
         opportunity_id=opportunity_id,
         project_id=project_id,
         recommendation=recommendation,
@@ -552,3 +824,11 @@ def run_water_ppp_bid_agent(
         human_approval_required=True,
         approved=False,
     )
+
+    if project_brain is not None:
+        write_bid_decision_to_project_brain(
+            decision=decision,
+            brain=project_brain,
+        )
+
+    return decision
