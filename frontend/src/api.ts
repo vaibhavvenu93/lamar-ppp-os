@@ -322,6 +322,113 @@ export type DocumentIntelligenceResponse = {
 };
 
 
+export type BidFactor = {
+  factor_id: string;
+  name: string;
+  score: number;
+  weight: number;
+  weighted_score: number;
+  rationale: string;
+  evidence_ids: string[];
+};
+
+
+export type BidIssue = {
+  issue_id: string;
+  title: string;
+  description: string;
+  issue_type: string;
+  severity: string;
+  blocking: boolean;
+  estimated_exposure_usd: number | null;
+  recommended_action: string | null;
+  evidence_ids: string[];
+};
+
+
+export type BidStrength = {
+  strength_id: string;
+  title: string;
+  description: string;
+  rationale: string;
+  evidence_ids: string[];
+};
+
+
+export type BidWorkstream = {
+  workstream_id: string;
+  title: string;
+  description: string;
+  owner: string | null;
+  priority: string;
+  dependency_ids: string[];
+  evidence_ids: string[];
+};
+
+
+export type BidDocumentAgentChain = {
+  run_id: string;
+  agent_name: string;
+  status: string;
+  evidence_count: number;
+};
+
+
+export type BidAgentChain = {
+  agent_name: string;
+  mode: string;
+  status: string;
+  recommendation: string;
+  human_approval_required: boolean;
+};
+
+
+export type BidGovernance = {
+  recommendation_policy: string;
+  approval_policy: string;
+  calculation_policy: string;
+  evidence_policy: string;
+};
+
+
+export type BidIntelligenceResponse = {
+  decision_id: string;
+  project_id: string;
+  opportunity_id: string;
+
+  recommendation: string;
+  readiness: string;
+  readiness_score: number;
+
+  recommendation_reason: string;
+
+  factors: BidFactor[];
+  issues: BidIssue[];
+  strengths: BidStrength[];
+  workstreams: BidWorkstream[];
+
+  evidence_ids: string[];
+
+  human_approval_required: boolean;
+  approved: boolean;
+  approved_by: string | null;
+
+  blocking_issue_count: number;
+  critical_issue_count: number;
+  total_estimated_exposure_usd: number;
+  can_auto_approve: boolean;
+
+  agent_chain: {
+    document_agent: BidDocumentAgentChain;
+    bid_agent: BidAgentChain;
+  };
+
+  governance: BidGovernance;
+
+  data_notice: string;
+};
+
+
 export async function getExecutiveBrief():
   Promise<ExecutiveBriefResponse> {
   const response = await fetch(
@@ -414,6 +521,44 @@ export async function investigateOpportunity(
   if (!response.ok) {
     let detail = (
       `Document Intelligence request failed: ${response.status}`
+    );
+
+    try {
+      const body = await response.json();
+
+      if (
+        typeof body?.detail === "string"
+        && body.detail.length > 0
+      ) {
+        detail = body.detail;
+      }
+    } catch {
+      // Preserve the HTTP status error when the response
+      // does not contain a JSON error body.
+    }
+
+    throw new Error(detail);
+  }
+
+  return response.json();
+}
+
+
+export async function evaluateBid(
+  opportunityId: string,
+): Promise<BidIntelligenceResponse> {
+  const response = await fetch(
+    `/api/opportunities/${encodeURIComponent(
+      opportunityId
+    )}/evaluate-bid`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    let detail = (
+      `Bid Intelligence request failed: ${response.status}`
     );
 
     try {
