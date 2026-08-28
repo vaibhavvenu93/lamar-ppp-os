@@ -183,6 +183,145 @@ export type OpportunityPortfolioResponse = {
 };
 
 
+export type DocumentPackageSummary = {
+  project_id: string;
+  opportunity_id: string | null;
+  analysis_id: string;
+  status: string;
+
+  document_count: number;
+  evidence_count: number;
+  requirement_count: number;
+  obligation_count: number;
+  risk_count: number;
+  clarification_count: number;
+  pending_review_count: number;
+
+  executive_summary: string | null;
+  human_review_required: boolean;
+};
+
+
+export type DocumentEvidence = {
+  evidence_id: string;
+  document_id: string;
+  document_name: string;
+  page_number: number | null;
+  clause_reference: string | null;
+  section_title: string | null;
+  source_text: string | null;
+  confidence: number;
+};
+
+
+export type DocumentRequirement = {
+  requirement_id: string;
+  title: string;
+  description: string;
+  category: string;
+  mandatory: boolean;
+  responsible_party: string | null;
+  due_date: string | null;
+  evidence_ids: string[];
+  confidence: number;
+  review_status: string;
+};
+
+
+export type DocumentObligation = {
+  obligation_id: string;
+  title: string;
+  description: string;
+  category: string;
+  obligated_party: string | null;
+  beneficiary_party: string | null;
+  trigger: string | null;
+  deadline: string | null;
+  financial_consequence_usd: number | null;
+  consequence_description: string | null;
+  evidence_ids: string[];
+  confidence: number;
+  review_status: string;
+};
+
+
+export type DocumentProjectDate = {
+  date_id: string;
+  title: string;
+  event_date: string;
+  description: string | null;
+  critical: boolean;
+  evidence_ids: string[];
+  confidence: number;
+  review_status: string;
+};
+
+
+export type DocumentRisk = {
+  risk_id: string;
+  title: string;
+  description: string;
+  category: string;
+  potential_impact: string | null;
+  estimated_impact_usd: number | null;
+  evidence_ids: string[];
+  confidence: number;
+  review_status: string;
+};
+
+
+export type DocumentClarification = {
+  clarification_id: string;
+  title: string;
+  question: string;
+  rationale: string;
+  related_document_ids: string[];
+  evidence_ids: string[];
+  priority: string;
+  human_submission_required: boolean;
+  review_status: string;
+};
+
+
+export type DocumentAgentRun = {
+  run_id: string;
+  project_id: string;
+  agent_name: string;
+  task: string;
+  status: string;
+
+  input_record_ids: string[];
+  tools_used: string[];
+  output_record_ids: string[];
+  evidence_ids: string[];
+
+  summary: string | null;
+
+  started_at: string | null;
+  completed_at: string | null;
+
+  human_review_required: boolean;
+  reviewed_by: string | null;
+};
+
+
+export type DocumentIntelligenceResponse = {
+  summary: DocumentPackageSummary;
+
+  requirements: DocumentRequirement[];
+  obligations: DocumentObligation[];
+  project_dates: DocumentProjectDate[];
+  risks: DocumentRisk[];
+  clarifications: DocumentClarification[];
+  evidence: DocumentEvidence[];
+
+  agent_run: DocumentAgentRun;
+
+  data_notice: string;
+  governance_notice: string;
+};
+
+
 export async function getExecutiveBrief():
   Promise<ExecutiveBriefResponse> {
   const response = await fetch(
@@ -254,6 +393,44 @@ export async function getOpportunity(
     throw new Error(
       `Opportunity investigation request failed: ${response.status}`
     );
+  }
+
+  return response.json();
+}
+
+
+export async function investigateOpportunity(
+  opportunityId: string,
+): Promise<DocumentIntelligenceResponse> {
+  const response = await fetch(
+    `/api/opportunities/${encodeURIComponent(
+      opportunityId
+    )}/investigate`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    let detail = (
+      `Document Intelligence request failed: ${response.status}`
+    );
+
+    try {
+      const body = await response.json();
+
+      if (
+        typeof body?.detail === "string"
+        && body.detail.length > 0
+      ) {
+        detail = body.detail;
+      }
+    } catch {
+      // Preserve the HTTP status error when the response
+      // does not contain a JSON error body.
+    }
+
+    throw new Error(detail);
   }
 
   return response.json();
