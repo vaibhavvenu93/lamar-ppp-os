@@ -5,6 +5,7 @@ import App from "./App";
 import "./styles.css";
 import "./document-intelligence.css";
 import "./bid-intelligence.css";
+import "./deal-room.css";
 
 const rootElement = document.getElementById("root");
 
