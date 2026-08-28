@@ -24,6 +24,7 @@ import {
   ExecutiveBriefResponse,
   getExecutiveBrief,
 } from "./api";
+import BuildWithHani from "./BuildWithHani";
 import FinancialTwin from "./FinancialTwin";
 import RiskAnalysis from "./RiskAnalysis";
 
@@ -364,6 +365,12 @@ function App() {
     ExecutiveBriefItem | null
   >(null);
 
+  const [
+    buildWithHaniOpen,
+    setBuildWithHaniOpen,
+  ] = useState(false);
+
+
   useEffect(() => {
     getExecutiveBrief()
       .then(setData)
@@ -371,6 +378,7 @@ function App() {
         setError(requestError.message);
       });
   }, []);
+
 
   const items = data?.brief.items ?? [];
 
@@ -386,8 +394,15 @@ function App() {
   ).length;
 
 
-  function openFinancialTwin() {
+  function closeAllPanels() {
     setAnalysisItem(null);
+    setFinancialTwinOpen(false);
+    setBuildWithHaniOpen(false);
+  }
+
+
+  function openFinancialTwin() {
+    closeAllPanels();
     setFinancialTwinOpen(true);
   }
 
@@ -395,13 +410,29 @@ function App() {
   function openAnalysis(
     item: ExecutiveBriefItem,
   ) {
-    setFinancialTwinOpen(false);
+    closeAllPanels();
     setAnalysisItem(item);
+  }
+
+
+  function openBuildWithHani() {
+    closeAllPanels();
+    setBuildWithHaniOpen(true);
   }
 
 
   function closeAnalysis() {
     setAnalysisItem(null);
+  }
+
+
+  function closeFinancialTwin() {
+    setFinancialTwinOpen(false);
+  }
+
+
+  function closeBuildWithHani() {
+    setBuildWithHaniOpen(false);
   }
 
 
@@ -475,12 +506,7 @@ function App() {
         <div className="sidebar-bottom">
           <button
             className="build-with-hani"
-            onClick={
-              items.length > 0
-                ? () =>
-                    openAnalysis(items[0])
-                : undefined
-            }
+            onClick={openBuildWithHani}
           >
             <Code2 size={18} />
 
@@ -754,22 +780,16 @@ function App() {
                 </h3>
 
                 <p>
-                  See how a risk becomes a
-                  financial scenario, inspect
-                  the calculation, change an
-                  assumption, and rerun it.
+                  See what is AI, what is
+                  deterministic code, where
+                  humans remain in control, and
+                  how I would start against a
+                  live Lamar workflow.
                 </p>
 
                 <button
                   className="text-button"
-                  onClick={
-                    items.length > 0
-                      ? () =>
-                          openAnalysis(
-                            items[0],
-                          )
-                      : undefined
-                  }
+                  onClick={openBuildWithHani}
                 >
                   Explore how this works
                   <ArrowRight size={14} />
@@ -805,8 +825,15 @@ function App() {
 
       {financialTwinOpen && (
         <FinancialTwin
-          onClose={() =>
-            setFinancialTwinOpen(false)
+          onClose={closeFinancialTwin}
+        />
+      )}
+
+      {buildWithHaniOpen && (
+        <BuildWithHani
+          onClose={closeBuildWithHani}
+          onOpenFinancialTwin={
+            openFinancialTwin
           }
         />
       )}
