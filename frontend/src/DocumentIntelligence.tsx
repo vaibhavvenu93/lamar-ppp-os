@@ -23,10 +23,14 @@ import {
 } from "react";
 
 import {
+  BidIntelligenceResponse,
   DocumentEvidence,
   DocumentIntelligenceResponse,
+  evaluateBid,
   investigateOpportunity,
 } from "./api";
+
+import BidIntelligence from "./BidIntelligence";
 
 import "./document-intelligence.css";
 
@@ -351,6 +355,25 @@ export default function DocumentIntelligence({
     null
   );
 
+  const [
+    bidIntelligence,
+    setBidIntelligence,
+  ] = useState<BidIntelligenceResponse | null>(
+    null
+  );
+
+  const [
+    bidLoading,
+    setBidLoading,
+  ] = useState(false);
+
+  const [
+    bidError,
+    setBidError,
+  ] = useState<string | null>(
+    null
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -427,6 +450,43 @@ export default function DocumentIntelligence({
       evidenceIds,
       title,
     });
+  }
+
+  async function runBidAgent() {
+    if (bidLoading) {
+      return;
+    }
+
+    setBidLoading(true);
+    setBidError(null);
+    setEvidenceSelection(null);
+
+    try {
+      const result = await evaluateBid(
+        opportunityId
+      );
+
+      setBidIntelligence(result);
+    } catch (requestError) {
+      setBidError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Bid Agent evaluation failed."
+      );
+    } finally {
+      setBidLoading(false);
+    }
+  }
+
+  if (bidIntelligence) {
+    return (
+      <BidIntelligence
+        opportunityName={opportunityName}
+        intelligence={bidIntelligence}
+        onBack={() => setBidIntelligence(null)}
+        onClose={onClose}
+      />
+    );
   }
 
   if (loading) {
@@ -1134,16 +1194,35 @@ export default function DocumentIntelligence({
                   without losing the source evidence behind each
                   conclusion.
                 </p>
+
+                {bidError && (
+                  <div className="doc-consequence">
+                    <AlertTriangle size={14} />
+                    {bidError}
+                  </div>
+                )}
               </div>
 
               <button
                 className="doc-primary-button"
                 type="button"
-                disabled
-                title="Bid Agent will be connected in the next build step."
+                onClick={runBidAgent}
+                disabled={bidLoading}
               >
-                Run Bid Agent
-                <ChevronRight size={16} />
+                {bidLoading ? (
+                  <>
+                    <LoaderCircle
+                      size={16}
+                      className="doc-spin"
+                    />
+                    Bid Agent running
+                  </>
+                ) : (
+                  <>
+                    Run Bid Agent
+                    <ChevronRight size={16} />
+                  </>
+                )}
               </button>
             </div>
           </section>
