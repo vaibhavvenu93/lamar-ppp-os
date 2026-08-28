@@ -513,7 +513,8 @@ def run_water_ppp_bid_agent(
             strengths,
             workstreams,
         )
-        for evidence_id in collection.evidence_ids
+        for record in collection
+        for evidence_id in record.evidence_ids
     })
 
     return BidDecision(
