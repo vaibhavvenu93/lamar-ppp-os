@@ -56,8 +56,17 @@ class ProjectRecordType(str, Enum):
     FINANCIAL_ASSUMPTION = "FINANCIAL_ASSUMPTION"
     MILESTONE = "MILESTONE"
     DECISION = "DECISION"
+
+    BID_ISSUE = "BID_ISSUE"
+    WORKSTREAM = "WORKSTREAM"
+    CLARIFICATION = "CLARIFICATION"
+
+    CONTRACT_TERM = "CONTRACT_TERM"
+    CONTRACT_RISK = "CONTRACT_RISK"
+
     CONSTRUCTION_SIGNAL = "CONSTRUCTION_SIGNAL"
     OPERATIONS_SIGNAL = "OPERATIONS_SIGNAL"
+
     MEMORY = "MEMORY"
     EVIDENCE = "EVIDENCE"
 
@@ -79,6 +88,24 @@ class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+
+
+class RecordStatus(str, Enum):
+    """
+    Lifecycle state of a Project Brain record.
+
+    Approval status answers whether a human has authorized a
+    consequential record.
+
+    Record status answers whether the underlying issue, obligation,
+    workstream, signal, or other item remains operationally active.
+    """
+
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    SUPERSEDED = "SUPERSEDED"
+    CLOSED = "CLOSED"
 
 
 class AgentRunStatus(str, Enum):
@@ -106,11 +133,12 @@ class ProjectRecord:
     A traceable unit of structured project knowledge.
 
     Examples include a tender requirement, contractual obligation,
-    financial assumption, milestone, project decision, or operating
-    signal.
+    financial assumption, bid issue, workstream, milestone, project
+    decision, construction signal, or operating signal.
 
     `payload` contains record-specific structured information while
-    the common fields provide provenance and governance.
+    the common fields provide provenance, relationships, lifecycle
+    state, and governance.
     """
 
     record_id: str
@@ -119,6 +147,7 @@ class ProjectRecord:
     title: str
 
     summary: Optional[str] = None
+
     source: RecordSource = RecordSource.SYSTEM
     source_reference: Optional[str] = None
 
@@ -127,7 +156,10 @@ class ProjectRecord:
     )
 
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
+
+    status: RecordStatus = RecordStatus.OPEN
 
     approval_status: ApprovalStatus = (
         ApprovalStatus.NOT_REQUIRED
@@ -137,9 +169,41 @@ class ProjectRecord:
         default_factory=list,
     )
 
+    related_record_ids: List[str] = field(
+        default_factory=list,
+    )
+
+    parent_record_id: Optional[str] = None
+
+    owner: Optional[str] = None
+    priority: Optional[str] = None
+
     tags: List[str] = field(
         default_factory=list,
     )
+
+    def touch(self) -> None:
+        """Update the record modification timestamp."""
+
+        self.updated_at = datetime.utcnow()
+
+    def resolve(self) -> None:
+        """Mark the record as operationally resolved."""
+
+        self.status = RecordStatus.RESOLVED
+        self.touch()
+
+    def close(self) -> None:
+        """Mark the record as closed."""
+
+        self.status = RecordStatus.CLOSED
+        self.touch()
+
+    def supersede(self) -> None:
+        """Mark the record as superseded by newer project state."""
+
+        self.status = RecordStatus.SUPERSEDED
+        self.touch()
 
 
 @dataclass
@@ -225,6 +289,7 @@ class AgentRun:
     )
 
     summary: Optional[str] = None
+
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -243,6 +308,10 @@ class ProjectBrain:
     factual project state, traceable machine outputs, human decisions,
     lifecycle milestones, and agent activity so the complete project
     history can be inspected and reused.
+
+    Records use stable identifiers. A specialist agent may therefore
+    update an existing record rather than creating disconnected copies
+    every time it runs.
     """
 
     project_id: str
@@ -265,19 +334,85 @@ class ProjectBrain:
 
     last_updated_at: Optional[datetime] = None
 
+    def _touch(self) -> None:
+        """Update the Project Brain modification timestamp."""
+
+        self.last_updated_at = datetime.utcnow()
+
     def add_record(
         self,
         record: ProjectRecord,
     ) -> None:
-        """Add a record belonging to this project."""
+        """
+        Add a new record belonging to this project.
+
+        Duplicate record identifiers are rejected so agents cannot
+        silently create conflicting project state.
+        """
 
         if record.project_id != self.project_id:
             raise ValueError(
                 "Project record belongs to a different project."
             )
 
+        if self.record_by_id(record.record_id) is not None:
+            raise ValueError(
+                f"Project record already exists: "
+                f"{record.record_id}"
+            )
+
+        now = datetime.utcnow()
+
+        if record.created_at is None:
+            record.created_at = now
+
+        record.updated_at = now
+
         self.records.append(record)
-        self.last_updated_at = datetime.utcnow()
+        self._touch()
+
+    def upsert_record(
+        self,
+        record: ProjectRecord,
+    ) -> None:
+        """
+        Insert or replace a record using its stable record ID.
+
+        This is the primary write primitive for agent-generated
+        Project Brain state. Re-running an agent updates the same
+        logical record instead of accumulating duplicate outputs.
+        """
+
+        if record.project_id != self.project_id:
+            raise ValueError(
+                "Project record belongs to a different project."
+            )
+
+        existing = self.record_by_id(
+            record.record_id,
+        )
+
+        now = datetime.utcnow()
+
+        if existing is None:
+            if record.created_at is None:
+                record.created_at = now
+
+            record.updated_at = now
+
+            self.records.append(record)
+            self._touch()
+            return
+
+        if record.created_at is None:
+            record.created_at = existing.created_at
+
+        record.updated_at = now
+
+        index = self.records.index(existing)
+        self.records[index] = record
+
+        self._touch()
 
     def add_decision(
         self,
@@ -290,8 +425,16 @@ class ProjectBrain:
                 "Project decision belongs to a different project."
             )
 
+        if self.decision_by_id(
+            decision.decision_id
+        ) is not None:
+            raise ValueError(
+                f"Project decision already exists: "
+                f"{decision.decision_id}"
+            )
+
         self.decisions.append(decision)
-        self.last_updated_at = datetime.utcnow()
+        self._touch()
 
     def add_milestone(
         self,
@@ -304,8 +447,16 @@ class ProjectBrain:
                 "Project milestone belongs to a different project."
             )
 
+        if self.milestone_by_id(
+            milestone.milestone_id
+        ) is not None:
+            raise ValueError(
+                f"Project milestone already exists: "
+                f"{milestone.milestone_id}"
+            )
+
         self.milestones.append(milestone)
-        self.last_updated_at = datetime.utcnow()
+        self._touch()
 
     def add_agent_run(
         self,
@@ -318,8 +469,64 @@ class ProjectBrain:
                 "Agent run belongs to a different project."
             )
 
+        if self.agent_run_by_id(
+            run.run_id
+        ) is not None:
+            raise ValueError(
+                f"Agent run already exists: "
+                f"{run.run_id}"
+            )
+
         self.agent_runs.append(run)
-        self.last_updated_at = datetime.utcnow()
+        self._touch()
+
+    def record_by_id(
+        self,
+        record_id: str,
+    ) -> Optional[ProjectRecord]:
+        """Return one Project Brain record by stable identifier."""
+
+        for record in self.records:
+            if record.record_id == record_id:
+                return record
+
+        return None
+
+    def decision_by_id(
+        self,
+        decision_id: str,
+    ) -> Optional[ProjectDecision]:
+        """Return one human decision by identifier."""
+
+        for decision in self.decisions:
+            if decision.decision_id == decision_id:
+                return decision
+
+        return None
+
+    def milestone_by_id(
+        self,
+        milestone_id: str,
+    ) -> Optional[ProjectMilestone]:
+        """Return one project milestone by identifier."""
+
+        for milestone in self.milestones:
+            if milestone.milestone_id == milestone_id:
+                return milestone
+
+        return None
+
+    def agent_run_by_id(
+        self,
+        run_id: str,
+    ) -> Optional[AgentRun]:
+        """Return one specialist-agent execution by identifier."""
+
+        for run in self.agent_runs:
+            if run.run_id == run_id:
+                return run
+
+        return None
 
     def records_by_type(
         self,
@@ -333,6 +540,83 @@ class ProjectBrain:
             if record.record_type == record_type
         ]
 
+    def records_by_status(
+        self,
+        status: RecordStatus,
+    ) -> List[ProjectRecord]:
+        """Return records in a specific lifecycle state."""
+
+        return [
+            record
+            for record in self.records
+            if record.status == status
+        ]
+
+    def records_by_owner(
+        self,
+        owner: str,
+    ) -> List[ProjectRecord]:
+        """Return project records assigned to one owner."""
+
+        return [
+            record
+            for record in self.records
+            if record.owner == owner
+        ]
+
+    def records_with_tag(
+        self,
+        tag: str,
+    ) -> List[ProjectRecord]:
+        """Return records carrying a specific tag."""
+
+        return [
+            record
+            for record in self.records
+            if tag in record.tags
+        ]
+
+    def related_records(
+        self,
+        record_id: str,
+    ) -> List[ProjectRecord]:
+        """
+        Return records explicitly related to a Project Brain record.
+
+        Relationships may be declared from either side, allowing
+        agents to traverse the shared state without requiring every
+        producer to duplicate relationship metadata.
+        """
+
+        related: List[ProjectRecord] = []
+
+        for record in self.records:
+            if (
+                record.record_id == record_id
+                or record_id in record.related_record_ids
+            ):
+                continue
+
+            source = self.record_by_id(
+                record_id,
+            )
+
+            if source is None:
+                return []
+
+            if (
+                record.record_id
+                in source.related_record_ids
+                or record_id
+                in record.related_record_ids
+                or record.parent_record_id == record_id
+                or source.parent_record_id
+                == record.record_id
+            ):
+                related.append(record)
+
+        return related
+
     def pending_approvals(
         self,
     ) -> List[ProjectRecord]:
@@ -343,6 +627,21 @@ class ProjectBrain:
             for record in self.records
             if record.approval_status
             == ApprovalStatus.PENDING
+        ]
+
+    def open_records(
+        self,
+    ) -> List[ProjectRecord]:
+        """Return unresolved operational project state."""
+
+        return [
+            record
+            for record in self.records
+            if record.status
+            in {
+                RecordStatus.OPEN,
+                RecordStatus.IN_PROGRESS,
+            }
         ]
 
     def runs_by_agent(
@@ -356,6 +655,99 @@ class ProjectBrain:
             for run in self.agent_runs
             if run.agent_name == agent_name
         ]
+
+    def evidence_ids(
+        self,
+    ) -> List[str]:
+        """Return unique evidence IDs referenced by project state."""
+
+        evidence = {
+            evidence_id
+            for record in self.records
+            for evidence_id in record.evidence_ids
+        }
+
+        evidence.update(
+            evidence_id
+            for decision in self.decisions
+            for evidence_id in decision.evidence_ids
+        )
+
+        evidence.update(
+            evidence_id
+            for run in self.agent_runs
+            for evidence_id in run.evidence_ids
+        )
+
+        return sorted(evidence)
+
+    def record_counts(
+        self,
+    ) -> Dict[str, int]:
+        """Return Project Brain record counts grouped by type."""
+
+        counts: Dict[str, int] = {}
+
+        for record in self.records:
+            key = record.record_type.value
+            counts[key] = counts.get(key, 0) + 1
+
+        return counts
+
+    def status_counts(
+        self,
+    ) -> Dict[str, int]:
+        """Return Project Brain record counts grouped by status."""
+
+        counts: Dict[str, int] = {}
+
+        for record in self.records:
+            key = record.status.value
+            counts[key] = counts.get(key, 0) + 1
+
+        return counts
+
+    def snapshot(
+        self,
+    ) -> Dict[str, Any]:
+        """
+        Return an inspectable summary of current shared project state.
+
+        This is intentionally a deterministic state summary rather
+        than an AI-generated executive narrative. Specialist agents,
+        API routes, and the Deal Room can consume this snapshot
+        without independently reconstructing the project.
+        """
+
+        return {
+            "project_id": self.project_id,
+            "record_count": len(self.records),
+            "decision_count": len(self.decisions),
+            "milestone_count": len(self.milestones),
+            "agent_run_count": len(self.agent_runs),
+            "pending_approval_count": len(
+                self.pending_approvals()
+            ),
+            "open_record_count": len(
+                self.open_records()
+            ),
+            "record_counts": self.record_counts(),
+            "status_counts": self.status_counts(),
+            "evidence_count": len(
+                self.evidence_ids()
+            ),
+            "agents": sorted(
+                {
+                    run.agent_name
+                    for run in self.agent_runs
+                }
+            ),
+            "last_updated_at": (
+                self.last_updated_at.isoformat()
+                if self.last_updated_at
+                else None
+            ),
+        }
 
 
 @dataclass
