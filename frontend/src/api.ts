@@ -325,9 +325,6 @@ export type DocumentIntelligenceResponse = {
 /*
  * =========================================================
  * BID INTELLIGENCE
- *
- * These types intentionally mirror the Python Bid domain
- * returned by /evaluate-bid.
  * =========================================================
  */
 
@@ -386,11 +383,13 @@ export type BidDocumentAgentChain = {
 
 
 export type BidAgentChain = {
+  run_id?: string;
   agent_name: string;
   mode: string;
   status: string;
   recommendation: string;
   human_approval_required: boolean;
+  output_record_count?: number;
 };
 
 
@@ -399,6 +398,30 @@ export type BidGovernance = {
   approval_policy: string;
   calculation_policy: string;
   evidence_policy: string;
+  state_policy?: string;
+};
+
+
+export type BidProjectBrainSummary = {
+  snapshot: {
+    project_id: string;
+    record_count: number;
+    decision_count: number;
+    milestone_count: number;
+    agent_run_count: number;
+    pending_approval_count: number;
+    open_record_count: number;
+    record_counts: Record<string, number>;
+    status_counts: Record<string, number>;
+    evidence_count: number;
+    agents: string[];
+    last_updated_at: string | null;
+  };
+
+  bid_issue_ids: string[];
+  workstream_ids: string[];
+  decision_record_id: string;
+  bid_agent_output_record_ids: string[];
 };
 
 
@@ -436,11 +459,156 @@ export type BidIntelligenceResponse = {
     bid_agent: BidAgentChain;
   };
 
+  project_brain?: BidProjectBrainSummary;
+
   governance: BidGovernance;
 
   data_notice: string;
 };
 
+
+/*
+ * =========================================================
+ * PROJECT BRAIN / DEAL ROOM
+ * =========================================================
+ */
+
+export type ProjectBrainRecord = {
+  record_id: string;
+  project_id: string;
+  record_type: string;
+  title: string;
+
+  summary: string | null;
+
+  source: string;
+  source_reference: string | null;
+
+  payload: Record<string, unknown>;
+
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: string | null;
+
+  status: string;
+  approval_status: string;
+
+  evidence_ids: string[];
+  related_record_ids: string[];
+  parent_record_id: string | null;
+
+  owner: string | null;
+  priority: string | null;
+
+  tags: string[];
+};
+
+
+export type ProjectBrainDecision = {
+  decision_id: string;
+  project_id: string;
+  title: string;
+  decision: string;
+
+  rationale: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+
+  related_record_ids: string[];
+  evidence_ids: string[];
+};
+
+
+export type ProjectBrainMilestone = {
+  milestone_id: string;
+  project_id: string;
+  name: string;
+
+  status: string;
+  planned_date: string | null;
+  actual_date: string | null;
+  owner: string | null;
+
+  related_record_ids: string[];
+};
+
+
+export type ProjectBrainAgentRun = {
+  run_id: string;
+  project_id: string;
+  agent_name: string;
+  task: string;
+
+  status: string;
+
+  input_record_ids: string[];
+  tools_used: string[];
+  output_record_ids: string[];
+  evidence_ids: string[];
+
+  summary: string | null;
+
+  started_at: string | null;
+  completed_at: string | null;
+
+  human_review_required: boolean;
+  reviewed_by: string | null;
+};
+
+
+export type ProjectBrainSnapshot = {
+  project_id: string;
+
+  record_count: number;
+  decision_count: number;
+  milestone_count: number;
+  agent_run_count: number;
+
+  pending_approval_count: number;
+  open_record_count: number;
+
+  record_counts: Record<string, number>;
+  status_counts: Record<string, number>;
+
+  evidence_count: number;
+  agents: string[];
+
+  last_updated_at: string | null;
+};
+
+
+export type ProjectBrainRelationship = {
+  source_record_id: string;
+  target_record_id: string;
+  relationship: string;
+};
+
+
+export type ProjectBrainResponse = {
+  project_id: string;
+
+  snapshot: ProjectBrainSnapshot;
+
+  records: ProjectBrainRecord[];
+  decisions: ProjectBrainDecision[];
+  milestones: ProjectBrainMilestone[];
+  agent_runs: ProjectBrainAgentRun[];
+
+  relationships: ProjectBrainRelationship[];
+
+  pending_approval_ids: string[];
+  open_record_ids: string[];
+
+  data_notice: string;
+  governance_notice: string;
+};
+
+
+/*
+ * =========================================================
+ * API FUNCTIONS
+ * =========================================================
+ */
 
 export async function getExecutiveBrief():
   Promise<ExecutiveBriefResponse> {
@@ -572,6 +740,41 @@ export async function evaluateBid(
   if (!response.ok) {
     let detail = (
       `Bid Intelligence request failed: ${response.status}`
+    );
+
+    try {
+      const body = await response.json();
+
+      if (
+        typeof body?.detail === "string"
+        && body.detail.length > 0
+      ) {
+        detail = body.detail;
+      }
+    } catch {
+      // Preserve the HTTP status error when the response
+      // does not contain a JSON error body.
+    }
+
+    throw new Error(detail);
+  }
+
+  return response.json();
+}
+
+
+export async function getProjectBrain(
+  opportunityId: string,
+): Promise<ProjectBrainResponse> {
+  const response = await fetch(
+    `/api/opportunities/${encodeURIComponent(
+      opportunityId
+    )}/project-brain`
+  );
+
+  if (!response.ok) {
+    let detail = (
+      `Project Brain request failed: ${response.status}`
     );
 
     try {
