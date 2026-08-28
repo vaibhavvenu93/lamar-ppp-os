@@ -26,6 +26,7 @@ import {
   OpportunityPortfolioResponse,
   OpportunitySummary,
 } from "./api";
+import DocumentIntelligence from "./DocumentIntelligence";
 
 
 type OpportunityRadarProps = {
@@ -263,10 +264,15 @@ function ScoreBreakdown({
 
 function OpportunityInvestigation({
   detail,
+  onInvestigate,
 }: {
   detail: OpportunityDetail;
+  onInvestigate: () => void;
 }) {
   const assessment = detail.assessment;
+
+  const documentIntelligenceAvailable =
+    detail.opportunity_id === "OPP-WATER-001";
 
   return (
     <div className="radar-investigation">
@@ -531,6 +537,22 @@ function OpportunityInvestigation({
             <button
               type="button"
               className="radar-secondary-action"
+              onClick={onInvestigate}
+              disabled={
+                !documentIntelligenceAvailable
+              }
+              title={
+                documentIntelligenceAvailable
+                  ? (
+                    "Run the Document Agent on the "
+                    + "synthetic tender package."
+                  )
+                  : (
+                    "The executable tender package is "
+                    + "currently available for the "
+                    + "water PPP demo opportunity."
+                  )
+              }
             >
               Investigate deeper
             </button>
@@ -538,6 +560,11 @@ function OpportunityInvestigation({
             <button
               type="button"
               className="radar-primary-action"
+              disabled
+              title={
+                "Bid Agent will be connected after "
+                + "Document Intelligence."
+              }
             >
               Run Bid / No-Bid
               <ArrowRight size={16} />
@@ -606,6 +633,11 @@ export default function OpportunityRadar({
     error,
     setError,
   ] = useState<string | null>(null);
+
+  const [
+    documentIntelligenceOpen,
+    setDocumentIntelligenceOpen,
+  ] = useState(false);
 
 
   useEffect(() => {
@@ -679,6 +711,25 @@ export default function OpportunityRadar({
         ) ?? null,
       [portfolio, selectedId],
     );
+
+
+  if (
+    documentIntelligenceOpen
+    && detail
+  ) {
+    return (
+      <DocumentIntelligence
+        opportunityId={
+          detail.opportunity_id
+        }
+        opportunityName={detail.name}
+        onClose={onClose}
+        onBack={() =>
+          setDocumentIntelligenceOpen(false)
+        }
+      />
+    );
+  }
 
 
   return (
@@ -805,11 +856,13 @@ export default function OpportunityRadar({
                           opportunity.opportunity_id ===
                           selectedId
                         }
-                        onSelect={() =>
+                        onSelect={() => {
                           setSelectedId(
                             opportunity.opportunity_id
-                          )
-                        }
+                          );
+
+                          setError(null);
+                        }}
                       />
                     )
                   )}
@@ -842,6 +895,11 @@ export default function OpportunityRadar({
                 {!detailLoading && detail && (
                   <OpportunityInvestigation
                     detail={detail}
+                    onInvestigate={() =>
+                      setDocumentIntelligenceOpen(
+                        true
+                      )
+                    }
                   />
                 )}
               </main>
