@@ -1,401 +1,282 @@
 """
-API response contract for Lamar PPP OS Project Brain.
+API response contract for Lamar PPP OS Document Intelligence.
 
-The Project Brain API exposes shared, traceable project state without
+The API exposes evidence-backed output from the Document Agent without
 requiring the frontend to understand internal domain dataclasses.
 
-It is designed to power the Deal Room and later specialist-agent
-workflows across bid, contract, finance, construction and operations.
-
-Machine recommendations remain distinct from authorized human
-decisions.
+Consequential conclusions remain subject to human review.
 """
 
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from lamar_os.domain.project import (
-    AgentRun,
-    ProjectBrain,
-    ProjectDecision,
-    ProjectMilestone,
-    ProjectRecord,
-)
+from lamar_os.domain.document import DocumentAnalysis
+from lamar_os.domain.project import AgentRun
 
 
-class ProjectBrainRecordResponse(BaseModel):
-    record_id: str
+class DocumentPackageSummaryResponse(BaseModel):
     project_id: str
-    record_type: str
-    title: str
-
-    summary: str | None
-    source: str
-    source_reference: str | None
-
-    payload: dict[str, Any]
-
-    created_at: datetime | None
-    updated_at: datetime | None
-    created_by: str | None
-
+    opportunity_id: str | None
+    analysis_id: str
     status: str
-    approval_status: str
 
-    evidence_ids: list[str]
-    related_record_ids: list[str]
-    parent_record_id: str | None
+    document_count: int
+    evidence_count: int
+    requirement_count: int
+    obligation_count: int
+    risk_count: int
+    clarification_count: int
+    pending_review_count: int
 
-    owner: str | None
-    priority: str | None
-
-    tags: list[str]
+    executive_summary: str | None
+    human_review_required: bool
 
 
-class ProjectBrainDecisionResponse(BaseModel):
-    decision_id: str
-    project_id: str
+class DocumentEvidenceResponse(BaseModel):
+    evidence_id: str
+    document_id: str
+    document_name: str
+    page_number: int | None
+    clause_reference: str | None
+    section_title: str | None
+    source_text: str | None
+    confidence: float
+
+
+class RequirementResponse(BaseModel):
+    requirement_id: str
     title: str
-    decision: str
-
-    rationale: str | None
-    decided_by: str | None
-    decided_at: datetime | None
-
-    related_record_ids: list[str]
+    description: str
+    category: str
+    mandatory: bool
+    responsible_party: str | None
+    due_date: date | None
     evidence_ids: list[str]
+    confidence: float
+    review_status: str
 
 
-class ProjectBrainMilestoneResponse(BaseModel):
-    milestone_id: str
-    project_id: str
-    name: str
+class ObligationResponse(BaseModel):
+    obligation_id: str
+    title: str
+    description: str
+    category: str
+    obligated_party: str | None
+    beneficiary_party: str | None
+    trigger: str | None
+    deadline: date | None
+    financial_consequence_usd: float | None
+    consequence_description: str | None
+    evidence_ids: list[str]
+    confidence: float
+    review_status: str
 
-    status: str
-    planned_date: str | None
-    actual_date: str | None
-    owner: str | None
 
-    related_record_ids: list[str]
+class ProjectDateResponse(BaseModel):
+    date_id: str
+    title: str
+    event_date: date
+    description: str | None
+    critical: bool
+    evidence_ids: list[str]
+    confidence: float
+    review_status: str
 
 
-class ProjectBrainAgentRunResponse(BaseModel):
+class DocumentRiskResponse(BaseModel):
+    risk_id: str
+    title: str
+    description: str
+    category: str
+    potential_impact: str | None
+    estimated_impact_usd: float | None
+    evidence_ids: list[str]
+    confidence: float
+    review_status: str
+
+
+class ClarificationResponse(BaseModel):
+    clarification_id: str
+    title: str
+    question: str
+    rationale: str
+    related_document_ids: list[str]
+    evidence_ids: list[str]
+    priority: str
+    human_submission_required: bool
+    review_status: str
+
+
+class AgentRunResponse(BaseModel):
     run_id: str
     project_id: str
     agent_name: str
     task: str
-
     status: str
-
     input_record_ids: list[str]
     tools_used: list[str]
     output_record_ids: list[str]
     evidence_ids: list[str]
-
     summary: str | None
-
     started_at: datetime | None
     completed_at: datetime | None
-
     human_review_required: bool
     reviewed_by: str | None
 
 
-class ProjectBrainSnapshotResponse(BaseModel):
-    project_id: str
-
-    record_count: int
-    decision_count: int
-    milestone_count: int
-    agent_run_count: int
-
-    pending_approval_count: int
-    open_record_count: int
-
-    record_counts: dict[str, int]
-    status_counts: dict[str, int]
-
-    evidence_count: int
-    agents: list[str]
-
-    last_updated_at: str | None
-
-
-class ProjectBrainRelationshipResponse(BaseModel):
-    """
-    One inspectable relationship between two Project Brain records.
-
-    This allows the Deal Room to show why a bid issue, workstream,
-    contract term, financial assumption or risk exists rather than
-    presenting intelligence as disconnected cards.
-    """
-
-    source_record_id: str
-    target_record_id: str
-    relationship: str
-
-
-class ProjectBrainResponse(BaseModel):
-    """
-    Frontend-safe representation of shared project intelligence.
-    """
-
-    project_id: str
-
-    snapshot: ProjectBrainSnapshotResponse
-
-    records: list[ProjectBrainRecordResponse]
-    decisions: list[ProjectBrainDecisionResponse]
-    milestones: list[ProjectBrainMilestoneResponse]
-    agent_runs: list[ProjectBrainAgentRunResponse]
-
-    relationships: list[
-        ProjectBrainRelationshipResponse
-    ]
-
-    pending_approval_ids: list[str]
-    open_record_ids: list[str]
+class DocumentIntelligenceResponse(BaseModel):
+    summary: DocumentPackageSummaryResponse
+    requirements: list[RequirementResponse]
+    obligations: list[ObligationResponse]
+    project_dates: list[ProjectDateResponse]
+    risks: list[DocumentRiskResponse]
+    clarifications: list[ClarificationResponse]
+    evidence: list[DocumentEvidenceResponse]
+    agent_run: AgentRunResponse
 
     data_notice: str
     governance_notice: str
 
 
-def _record_response(
-    record: ProjectRecord,
-) -> ProjectBrainRecordResponse:
-    """Convert one Project Brain record to its API contract."""
+def document_intelligence_response(
+    analysis: DocumentAnalysis,
+    agent_run: AgentRun,
+) -> DocumentIntelligenceResponse:
+    """Convert domain output into the frontend API contract."""
 
-    return ProjectBrainRecordResponse(
-        record_id=record.record_id,
-        project_id=record.project_id,
-        record_type=record.record_type.value,
-        title=record.title,
-        summary=record.summary,
-        source=record.source.value,
-        source_reference=record.source_reference,
-        payload=record.payload,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
-        created_by=record.created_by,
-        status=record.status.value,
-        approval_status=record.approval_status.value,
-        evidence_ids=record.evidence_ids,
-        related_record_ids=record.related_record_ids,
-        parent_record_id=record.parent_record_id,
-        owner=record.owner,
-        priority=record.priority,
-        tags=record.tags,
-    )
-
-
-def _decision_response(
-    decision: ProjectDecision,
-) -> ProjectBrainDecisionResponse:
-    """Convert one authorized human decision."""
-
-    return ProjectBrainDecisionResponse(
-        decision_id=decision.decision_id,
-        project_id=decision.project_id,
-        title=decision.title,
-        decision=decision.decision,
-        rationale=decision.rationale,
-        decided_by=decision.decided_by,
-        decided_at=decision.decided_at,
-        related_record_ids=decision.related_record_ids,
-        evidence_ids=decision.evidence_ids,
-    )
-
-
-def _milestone_response(
-    milestone: ProjectMilestone,
-) -> ProjectBrainMilestoneResponse:
-    """Convert one lifecycle milestone."""
-
-    return ProjectBrainMilestoneResponse(
-        milestone_id=milestone.milestone_id,
-        project_id=milestone.project_id,
-        name=milestone.name,
-        status=milestone.status,
-        planned_date=milestone.planned_date,
-        actual_date=milestone.actual_date,
-        owner=milestone.owner,
-        related_record_ids=milestone.related_record_ids,
-    )
-
-
-def _agent_run_response(
-    run: AgentRun,
-) -> ProjectBrainAgentRunResponse:
-    """Convert one specialist-agent execution."""
-
-    return ProjectBrainAgentRunResponse(
-        run_id=run.run_id,
-        project_id=run.project_id,
-        agent_name=run.agent_name,
-        task=run.task,
-        status=run.status.value,
-        input_record_ids=run.input_record_ids,
-        tools_used=run.tools_used,
-        output_record_ids=run.output_record_ids,
-        evidence_ids=run.evidence_ids,
-        summary=run.summary,
-        started_at=run.started_at,
-        completed_at=run.completed_at,
-        human_review_required=run.human_review_required,
-        reviewed_by=run.reviewed_by,
-    )
-
-
-def _relationships(
-    brain: ProjectBrain,
-) -> list[ProjectBrainRelationshipResponse]:
-    """
-    Build deterministic record-to-record relationships.
-
-    Only relationships where both endpoints are Project Brain records
-    are emitted. Evidence references that have not themselves been
-    stored as ProjectRecord objects remain available through each
-    record's evidence_ids.
-    """
-
-    record_ids = {
-        record.record_id
-        for record in brain.records
-    }
-
-    relationships: list[
-        ProjectBrainRelationshipResponse
-    ] = []
-
-    seen: set[
-        tuple[str, str, str]
-    ] = set()
-
-    for record in brain.records:
-        for related_id in record.related_record_ids:
-            if related_id not in record_ids:
-                continue
-
-            key = (
-                record.record_id,
-                related_id,
-                "RELATED_TO",
-            )
-
-            if key in seen:
-                continue
-
-            seen.add(key)
-
-            relationships.append(
-                ProjectBrainRelationshipResponse(
-                    source_record_id=record.record_id,
-                    target_record_id=related_id,
-                    relationship="RELATED_TO",
-                )
-            )
-
-        if (
-            record.parent_record_id is not None
-            and record.parent_record_id in record_ids
-        ):
-            key = (
-                record.record_id,
-                record.parent_record_id,
-                "CHILD_OF",
-            )
-
-            if key not in seen:
-                seen.add(key)
-
-                relationships.append(
-                    ProjectBrainRelationshipResponse(
-                        source_record_id=record.record_id,
-                        target_record_id=(
-                            record.parent_record_id
-                        ),
-                        relationship="CHILD_OF",
-                    )
-                )
-
-    relationships.sort(
-        key=lambda relationship: (
-            relationship.source_record_id,
-            relationship.target_record_id,
-            relationship.relationship,
-        )
-    )
-
-    return relationships
-
-
-def project_brain_response(
-    brain: ProjectBrain,
-) -> ProjectBrainResponse:
-    """
-    Convert shared project state into the Deal Room API contract.
-
-    This function does not generate new intelligence. It exposes the
-    current deterministic Project Brain state in an inspectable form.
-    """
-
-    snapshot = brain.snapshot()
-
-    return ProjectBrainResponse(
-        project_id=brain.project_id,
-        snapshot=ProjectBrainSnapshotResponse(
-            project_id=snapshot["project_id"],
-            record_count=snapshot["record_count"],
-            decision_count=snapshot["decision_count"],
-            milestone_count=snapshot["milestone_count"],
-            agent_run_count=snapshot["agent_run_count"],
-            pending_approval_count=(
-                snapshot["pending_approval_count"]
-            ),
-            open_record_count=(
-                snapshot["open_record_count"]
-            ),
-            record_counts=snapshot["record_counts"],
-            status_counts=snapshot["status_counts"],
-            evidence_count=snapshot["evidence_count"],
-            agents=snapshot["agents"],
-            last_updated_at=snapshot["last_updated_at"],
+    return DocumentIntelligenceResponse(
+        summary=DocumentPackageSummaryResponse(
+            project_id=analysis.project_id,
+            opportunity_id=analysis.opportunity_id,
+            analysis_id=analysis.analysis_id,
+            status=analysis.status.value,
+            document_count=len(analysis.document_ids),
+            evidence_count=analysis.evidence_count,
+            requirement_count=analysis.requirement_count,
+            obligation_count=analysis.obligation_count,
+            risk_count=analysis.risk_count,
+            clarification_count=analysis.clarification_count,
+            pending_review_count=analysis.pending_review_count(),
+            executive_summary=analysis.executive_summary,
+            human_review_required=analysis.human_review_required,
         ),
-        records=[
-            _record_response(record)
-            for record in brain.records
+        requirements=[
+            RequirementResponse(
+                requirement_id=item.requirement_id,
+                title=item.title,
+                description=item.description,
+                category=item.category.value,
+                mandatory=item.mandatory,
+                responsible_party=item.responsible_party,
+                due_date=item.due_date,
+                evidence_ids=item.evidence_ids,
+                confidence=item.confidence,
+                review_status=item.review_status.value,
+            )
+            for item in analysis.requirements
         ],
-        decisions=[
-            _decision_response(decision)
-            for decision in brain.decisions
+        obligations=[
+            ObligationResponse(
+                obligation_id=item.obligation_id,
+                title=item.title,
+                description=item.description,
+                category=item.category.value,
+                obligated_party=item.obligated_party,
+                beneficiary_party=item.beneficiary_party,
+                trigger=item.trigger,
+                deadline=item.deadline,
+                financial_consequence_usd=(
+                    item.financial_consequence_usd
+                ),
+                consequence_description=(
+                    item.consequence_description
+                ),
+                evidence_ids=item.evidence_ids,
+                confidence=item.confidence,
+                review_status=item.review_status.value,
+            )
+            for item in analysis.obligations
         ],
-        milestones=[
-            _milestone_response(milestone)
-            for milestone in brain.milestones
+        project_dates=[
+            ProjectDateResponse(
+                date_id=item.date_id,
+                title=item.title,
+                event_date=item.event_date,
+                description=item.description,
+                critical=item.critical,
+                evidence_ids=item.evidence_ids,
+                confidence=item.confidence,
+                review_status=item.review_status.value,
+            )
+            for item in analysis.project_dates
         ],
-        agent_runs=[
-            _agent_run_response(run)
-            for run in brain.agent_runs
+        risks=[
+            DocumentRiskResponse(
+                risk_id=item.risk_id,
+                title=item.title,
+                description=item.description,
+                category=item.category.value,
+                potential_impact=item.potential_impact,
+                estimated_impact_usd=item.estimated_impact_usd,
+                evidence_ids=item.evidence_ids,
+                confidence=item.confidence,
+                review_status=item.review_status.value,
+            )
+            for item in analysis.risks
         ],
-        relationships=_relationships(brain),
-        pending_approval_ids=[
-            record.record_id
-            for record in brain.pending_approvals()
+        clarifications=[
+            ClarificationResponse(
+                clarification_id=item.clarification_id,
+                title=item.title,
+                question=item.question,
+                rationale=item.rationale,
+                related_document_ids=item.related_document_ids,
+                evidence_ids=item.evidence_ids,
+                priority=item.priority,
+                human_submission_required=(
+                    item.human_submission_required
+                ),
+                review_status=item.review_status.value,
+            )
+            for item in analysis.clarification_questions
         ],
-        open_record_ids=[
-            record.record_id
-            for record in brain.open_records()
+        evidence=[
+            DocumentEvidenceResponse(
+                evidence_id=item.evidence_id,
+                document_id=item.document_id,
+                document_name=item.document_name,
+                page_number=item.page_number,
+                clause_reference=item.clause_reference,
+                section_title=item.section_title,
+                source_text=item.source_text,
+                confidence=item.confidence,
+            )
+            for item in analysis.evidence
         ],
+        agent_run=AgentRunResponse(
+            run_id=agent_run.run_id,
+            project_id=agent_run.project_id,
+            agent_name=agent_run.agent_name,
+            task=agent_run.task,
+            status=agent_run.status.value,
+            input_record_ids=agent_run.input_record_ids,
+            tools_used=agent_run.tools_used,
+            output_record_ids=agent_run.output_record_ids,
+            evidence_ids=agent_run.evidence_ids,
+            summary=agent_run.summary,
+            started_at=agent_run.started_at,
+            completed_at=agent_run.completed_at,
+            human_review_required=agent_run.human_review_required,
+            reviewed_by=agent_run.reviewed_by,
+        ),
         data_notice=(
             "DEMO ENVIRONMENT — PUBLIC INFORMATION + SYNTHETIC "
             "PROJECT DATA. NOT LAMAR INTERNAL DATA."
         ),
         governance_notice=(
-            "The Project Brain stores traceable project state and "
-            "machine recommendations. Agent-generated records do not "
-            "constitute human approval of Bid / No-Bid, contractual, "
-            "investment, financing, engineering or operating decisions."
+            "The Document Agent structures and traces procurement "
+            "intelligence. Extracted requirements, obligations, risks "
+            "and clarification questions remain subject to human review."
         ),
     )
