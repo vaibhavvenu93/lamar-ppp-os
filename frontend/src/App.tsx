@@ -25,6 +25,7 @@ import {
   getExecutiveBrief,
 } from "./api";
 import FinancialTwin from "./FinancialTwin";
+import RiskAnalysis from "./RiskAnalysis";
 
 
 const lifecycle = [
@@ -118,9 +119,11 @@ function priorityClass(
 function SignalCard({
   item,
   onRunScenario,
+  onOpenAnalysis,
 }: {
   item: ExecutiveBriefItem;
   onRunScenario: () => void;
+  onOpenAnalysis: () => void;
 }) {
   return (
     <article
@@ -207,11 +210,15 @@ function SignalCard({
 
               <div className="risk-stat">
                 <span>Signal type</span>
-                <strong>{item.type}</strong>
+
+                <strong>
+                  {item.type}
+                </strong>
               </div>
 
               <div className="risk-stat">
                 <span>Priority</span>
+
                 <strong>
                   {item.priority}
                 </strong>
@@ -229,6 +236,7 @@ function SignalCard({
                   <span>
                     Financial translation
                   </span>
+
                   <strong>
                     Scenario modeled
                   </strong>
@@ -238,6 +246,7 @@ function SignalCard({
                   <span>
                     Executive ranking
                   </span>
+
                   <strong>
                     {item.attention_score}/100
                   </strong>
@@ -247,6 +256,7 @@ function SignalCard({
                   <span>
                     Human approval
                   </span>
+
                   <strong>
                     {item.requires_decision
                       ? "Required"
@@ -271,7 +281,10 @@ function SignalCard({
             </div>
 
             <div className="signal-actions">
-              <button className="primary-button">
+              <button
+                className="primary-button"
+                onClick={onOpenAnalysis}
+              >
                 Open analysis
                 <ArrowRight size={15} />
               </button>
@@ -283,7 +296,10 @@ function SignalCard({
                 Run scenario
               </button>
 
-              <button className="text-button">
+              <button
+                className="text-button"
+                onClick={onOpenAnalysis}
+              >
                 View calculation trace
               </button>
             </div>
@@ -307,7 +323,10 @@ function SignalCard({
                     : "Executive signal"}
               </span>
 
-              <button className="text-button">
+              <button
+                className="text-button"
+                onClick={onOpenAnalysis}
+              >
                 Review signal
                 <ArrowRight size={14} />
               </button>
@@ -338,6 +357,13 @@ function App() {
     setFinancialTwinOpen,
   ] = useState(false);
 
+  const [
+    analysisItem,
+    setAnalysisItem,
+  ] = useState<
+    ExecutiveBriefItem | null
+  >(null);
+
   useEffect(() => {
     getExecutiveBrief()
       .then(setData)
@@ -358,6 +384,26 @@ function App() {
   const decisionsRequired = items.filter(
     (item) => item.requires_decision,
   ).length;
+
+
+  function openFinancialTwin() {
+    setAnalysisItem(null);
+    setFinancialTwinOpen(true);
+  }
+
+
+  function openAnalysis(
+    item: ExecutiveBriefItem,
+  ) {
+    setFinancialTwinOpen(false);
+    setAnalysisItem(item);
+  }
+
+
+  function closeAnalysis() {
+    setAnalysisItem(null);
+  }
+
 
   return (
     <div className="app-shell">
@@ -402,11 +448,15 @@ function App() {
                 onClick={
                   module.label ===
                   "Financial Twin"
-                    ? () =>
-                        setFinancialTwinOpen(
-                          true,
-                        )
-                    : undefined
+                    ? openFinancialTwin
+                    : module.label ===
+                        "Risk Intelligence" &&
+                      items.length > 0
+                      ? () =>
+                          openAnalysis(
+                            items[0],
+                          )
+                      : undefined
                 }
               >
                 <Icon
@@ -423,7 +473,15 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="build-with-hani">
+          <button
+            className="build-with-hani"
+            onClick={
+              items.length > 0
+                ? () =>
+                    openAnalysis(items[0])
+                : undefined
+            }
+          >
             <Code2 size={18} />
 
             <div>
@@ -505,6 +563,7 @@ function App() {
               <span>
                 LIVE ENGINE OUTPUT
               </span>
+
               <span>V0.1</span>
             </div>
           </div>
@@ -629,8 +688,11 @@ function App() {
             <>
               <SignalCard
                 item={items[0]}
-                onRunScenario={() =>
-                  setFinancialTwinOpen(true)
+                onOpenAnalysis={() =>
+                  openAnalysis(items[0])
+                }
+                onRunScenario={
+                  openFinancialTwin
                 }
               />
 
@@ -641,10 +703,11 @@ function App() {
                     <SignalCard
                       item={item}
                       key={item.signal_id}
-                      onRunScenario={() =>
-                        setFinancialTwinOpen(
-                          true,
-                        )
+                      onOpenAnalysis={() =>
+                        openAnalysis(item)
+                      }
+                      onRunScenario={
+                        openFinancialTwin
                       }
                     />
                   ))}
@@ -699,8 +762,13 @@ function App() {
 
                 <button
                   className="text-button"
-                  onClick={() =>
-                    setFinancialTwinOpen(true)
+                  onClick={
+                    items.length > 0
+                      ? () =>
+                          openAnalysis(
+                            items[0],
+                          )
+                      : undefined
                   }
                 >
                   Explore how this works
@@ -724,6 +792,16 @@ function App() {
           </footer>
         </section>
       </main>
+
+      {analysisItem && (
+        <RiskAnalysis
+          item={analysisItem}
+          onClose={closeAnalysis}
+          onRunScenario={
+            openFinancialTwin
+          }
+        />
+      )}
 
       {financialTwinOpen && (
         <FinancialTwin
