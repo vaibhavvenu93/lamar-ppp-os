@@ -322,12 +322,21 @@ export type DocumentIntelligenceResponse = {
 };
 
 
+/*
+ * =========================================================
+ * BID INTELLIGENCE
+ *
+ * These types intentionally mirror the Python Bid domain
+ * returned by /evaluate-bid.
+ * =========================================================
+ */
+
 export type BidFactor = {
   factor_id: string;
   name: string;
+  category: string;
   score: number;
   weight: number;
-  weighted_score: number;
   rationale: string;
   evidence_ids: string[];
 };
@@ -341,7 +350,8 @@ export type BidIssue = {
   severity: string;
   blocking: boolean;
   estimated_exposure_usd: number | null;
-  recommended_action: string | null;
+  owner: string | null;
+  resolution_required: string | null;
   evidence_ids: string[];
 };
 
@@ -350,18 +360,19 @@ export type BidStrength = {
   strength_id: string;
   title: string;
   description: string;
-  rationale: string;
+  score: number;
   evidence_ids: string[];
 };
 
 
 export type BidWorkstream = {
   workstream_id: string;
-  title: string;
-  description: string;
-  owner: string | null;
+  name: string;
+  objective: string;
+  owner: string;
   priority: string;
-  dependency_ids: string[];
+  status: string;
+  dependencies: string[];
   evidence_ids: string[];
 };
 
@@ -392,26 +403,28 @@ export type BidGovernance = {
 
 
 export type BidIntelligenceResponse = {
-  decision_id: string;
-  project_id: string;
   opportunity_id: string;
+  project_id: string;
 
   recommendation: string;
   readiness: string;
   readiness_score: number;
+  confidence: number;
 
-  recommendation_reason: string;
+  executive_thesis: string;
+  decision_rationale: string;
 
   factors: BidFactor[];
-  issues: BidIssue[];
   strengths: BidStrength[];
+  issues: BidIssue[];
   workstreams: BidWorkstream[];
 
+  unresolved_blockers: string[];
+  clarification_ids: string[];
   evidence_ids: string[];
 
   human_approval_required: boolean;
   approved: boolean;
-  approved_by: string | null;
 
   blocking_issue_count: number;
   critical_issue_count: number;
