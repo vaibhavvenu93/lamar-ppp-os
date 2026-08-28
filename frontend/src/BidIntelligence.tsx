@@ -55,11 +55,20 @@ function formatMoney(
 }
 
 
-function humanize(value: string): string {
+function humanize(
+  value: string | null | undefined,
+): string {
+  if (!value) {
+    return "—";
+  }
+
   return value
     .replaceAll("_", " ")
     .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(
+      /\b\w/g,
+      (character) => character.toUpperCase(),
+    );
 }
 
 
@@ -76,7 +85,9 @@ function scoreBand(score: number): string {
 }
 
 
-function severityClass(severity: string): string {
+function severityClass(
+  severity: string,
+): string {
   const normalized = severity.toLowerCase();
 
   if (
@@ -114,7 +125,9 @@ function FactorRow({
           </span>
         </div>
 
-        <strong className={`bid-factor-score ${band}`}>
+        <strong
+          className={`bid-factor-score ${band}`}
+        >
           {factor.score.toFixed(0)}
         </strong>
       </div>
@@ -135,11 +148,13 @@ function FactorRow({
 
       {factor.evidence_ids.length > 0 && (
         <div className="bid-evidence-links">
-          {factor.evidence_ids.map((evidenceId) => (
-            <span key={evidenceId}>
-              {evidenceId}
-            </span>
-          ))}
+          {factor.evidence_ids.map(
+            (evidenceId) => (
+              <span key={evidenceId}>
+                {evidenceId}
+              </span>
+            ),
+          )}
         </div>
       )}
     </article>
@@ -152,13 +167,19 @@ function IssueCard({
 }: {
   issue: BidIssue;
 }) {
-  const severity = severityClass(issue.severity);
+  const severity = severityClass(
+    issue.severity,
+  );
 
   return (
-    <article className={`bid-issue-card ${severity}`}>
+    <article
+      className={`bid-issue-card ${severity}`}
+    >
       <div className="bid-issue-topline">
         <div className="bid-issue-labels">
-          <span className={`bid-severity ${severity}`}>
+          <span
+            className={`bid-severity ${severity}`}
+          >
             {humanize(issue.severity)}
           </span>
 
@@ -184,22 +205,35 @@ function IssueCard({
       </div>
 
       <h4>{issue.title}</h4>
+
       <p>{issue.description}</p>
 
-      {issue.recommended_action && (
+      {issue.resolution_required && (
         <div className="bid-recommended-action">
-          <span>Recommended action</span>
-          <strong>{issue.recommended_action}</strong>
+          <span>Resolution required</span>
+
+          <strong>
+            {issue.resolution_required}
+          </strong>
+        </div>
+      )}
+
+      {issue.owner && (
+        <div className="bid-workstream-owner">
+          Owner
+          <strong>{issue.owner}</strong>
         </div>
       )}
 
       {issue.evidence_ids.length > 0 && (
         <div className="bid-evidence-links">
-          {issue.evidence_ids.map((evidenceId) => (
-            <span key={evidenceId}>
-              {evidenceId}
-            </span>
-          ))}
+          {issue.evidence_ids.map(
+            (evidenceId) => (
+              <span key={evidenceId}>
+                {evidenceId}
+              </span>
+            ),
+          )}
         </div>
       )}
     </article>
@@ -226,30 +260,41 @@ function WorkstreamCard({
             <span>
               {humanize(workstream.priority)} priority
             </span>
-            <h4>{workstream.title}</h4>
+
+            <h4>{workstream.name}</h4>
           </div>
 
           <Workflow size={19} />
         </div>
 
-        <p>{workstream.description}</p>
+        <p>{workstream.objective}</p>
 
-        {workstream.owner && (
-          <div className="bid-workstream-owner">
-            Owner
-            <strong>{workstream.owner}</strong>
-          </div>
-        )}
+        <div className="bid-workstream-owner">
+          Owner
+          <strong>{workstream.owner}</strong>
+        </div>
 
-        {workstream.dependency_ids.length > 0 && (
+        {workstream.dependencies.length > 0 && (
           <div className="bid-dependency-row">
             <span>Depends on</span>
 
-            {workstream.dependency_ids.map(
+            {workstream.dependencies.map(
               (dependencyId) => (
                 <strong key={dependencyId}>
                   {dependencyId}
                 </strong>
+              ),
+            )}
+          </div>
+        )}
+
+        {workstream.evidence_ids.length > 0 && (
+          <div className="bid-evidence-links">
+            {workstream.evidence_ids.map(
+              (evidenceId) => (
+                <span key={evidenceId}>
+                  {evidenceId}
+                </span>
               ),
             )}
           </div>
@@ -337,20 +382,26 @@ export default function BidIntelligence({
 
               <h1>
                 Pursue the opportunity.
-                <span> Resolve the blockers first.</span>
+                <span>
+                  {" "}Resolve the blockers first.
+                </span>
               </h1>
 
               <p className="bid-hero-summary">
-                {intelligence.recommendation_reason}
+                {intelligence.executive_thesis}
               </p>
 
               <div className="bid-agent-path">
                 <div className="complete">
                   <FileSearch size={16} />
+
                   <span>
                     Document Agent
-                    <small>Evidence structured</small>
+                    <small>
+                      Evidence structured
+                    </small>
                   </span>
+
                   <CheckCircle2 size={15} />
                 </div>
 
@@ -358,10 +409,14 @@ export default function BidIntelligence({
 
                 <div className="active">
                   <Bot size={16} />
+
                   <span>
                     Bid Agent
-                    <small>Decision modeled</small>
+                    <small>
+                      Decision modeled
+                    </small>
                   </span>
+
                   <CheckCircle2 size={15} />
                 </div>
 
@@ -369,10 +424,14 @@ export default function BidIntelligence({
 
                 <div>
                   <UserCheck size={16} />
+
                   <span>
                     Human
-                    <small>Approval required</small>
+                    <small>
+                      Approval required
+                    </small>
                   </span>
+
                   <LockKeyhole size={15} />
                 </div>
               </div>
@@ -384,17 +443,23 @@ export default function BidIntelligence({
               </span>
 
               <div
-                className={`bid-readiness-ring ${readinessBand}`}
+                className={
+                  `bid-readiness-ring ${readinessBand}`
+                }
               >
                 <strong>
                   {intelligence.readiness_score.toFixed(1)}
                 </strong>
+
                 <span>/ 100</span>
               </div>
 
               <div className="bid-recommendation">
                 <Sparkles size={17} />
-                <strong>{recommendation}</strong>
+
+                <strong>
+                  {recommendation}
+                </strong>
               </div>
 
               <span className="bid-readiness-label">
@@ -406,8 +471,10 @@ export default function BidIntelligence({
 
                 <span>
                   HUMAN DECISION GATE
+
                   <strong>
-                    Agent cannot approve its own recommendation
+                    Agent cannot approve its own
+                    recommendation
                   </strong>
                 </span>
               </div>
@@ -419,46 +486,66 @@ export default function BidIntelligence({
               <div className="bid-metric-icon">
                 <Gauge size={19} />
               </div>
+
               <span>Readiness</span>
+
               <strong>
                 {intelligence.readiness_score.toFixed(1)}
               </strong>
-              <small>Deterministic weighted score</small>
+
+              <small>
+                Deterministic weighted score
+              </small>
             </article>
 
             <article>
               <div className="bid-metric-icon">
                 <ShieldAlert size={19} />
               </div>
+
               <span>Bid blockers</span>
+
               <strong>
                 {intelligence.blocking_issue_count}
               </strong>
-              <small>Must be resolved before approval</small>
+
+              <small>
+                Must be resolved before approval
+              </small>
             </article>
 
             <article>
               <div className="bid-metric-icon">
                 <CircleDollarSign size={19} />
               </div>
+
               <span>Quantified exposure</span>
+
               <strong>
                 {formatMoney(
                   intelligence.total_estimated_exposure_usd,
                 )}
               </strong>
-              <small>Known modeled issue exposure</small>
+
+              <small>
+                Known modeled issue exposure
+              </small>
             </article>
 
             <article>
               <div className="bid-metric-icon">
                 <Target size={19} />
               </div>
+
               <span>Required workstreams</span>
+
               <strong>
                 {intelligence.workstreams.length}
               </strong>
-              <small>Actions generated from decision gaps</small>
+
+              <small>
+                Actions generated from decision gaps
+              </small>
             </article>
           </section>
 
@@ -468,8 +555,10 @@ export default function BidIntelligence({
                 <div className="bid-section-heading">
                   <div>
                     <span>DECISION LOGIC</span>
+
                     <h2>
-                      Why the Bid Agent reached this recommendation
+                      Why the Bid Agent reached this
+                      recommendation
                     </h2>
                   </div>
 
@@ -478,13 +567,19 @@ export default function BidIntelligence({
                   </span>
                 </div>
 
+                <p className="bid-hero-summary">
+                  {intelligence.decision_rationale}
+                </p>
+
                 <div className="bid-factor-list">
-                  {intelligence.factors.map((factor) => (
-                    <FactorRow
-                      key={factor.factor_id}
-                      factor={factor}
-                    />
-                  ))}
+                  {intelligence.factors.map(
+                    (factor) => (
+                      <FactorRow
+                        key={factor.factor_id}
+                        factor={factor}
+                      />
+                    ),
+                  )}
                 </div>
               </section>
 
@@ -492,6 +587,7 @@ export default function BidIntelligence({
                 <div className="bid-section-heading">
                   <div>
                     <span>ISSUE REGISTER</span>
+
                     <h2>
                       What prevents an unconditional bid
                     </h2>
@@ -503,12 +599,14 @@ export default function BidIntelligence({
                 </div>
 
                 <div className="bid-issue-grid">
-                  {intelligence.issues.map((issue) => (
-                    <IssueCard
-                      key={issue.issue_id}
-                      issue={issue}
-                    />
-                  ))}
+                  {intelligence.issues.map(
+                    (issue) => (
+                      <IssueCard
+                        key={issue.issue_id}
+                        issue={issue}
+                      />
+                    ),
+                  )}
                 </div>
               </section>
 
@@ -516,13 +614,16 @@ export default function BidIntelligence({
                 <div className="bid-section-heading">
                   <div>
                     <span>ACTION PLAN</span>
+
                     <h2>
-                      Workstreams required to reach Bid-ready
+                      Workstreams required to reach
+                      Bid-ready
                     </h2>
                   </div>
 
                   <span className="bid-count-pill">
-                    {intelligence.workstreams.length} workstreams
+                    {intelligence.workstreams.length}
+                    {" "}workstreams
                   </span>
                 </div>
 
@@ -544,27 +645,40 @@ export default function BidIntelligence({
               <section className="bid-side-card">
                 <div className="bid-side-heading">
                   <CheckCircle2 size={18} />
+
                   <div>
                     <span>WHY PURSUE</span>
-                    <h3>Strategic strengths</h3>
+
+                    <h3>
+                      Strategic strengths
+                    </h3>
                   </div>
                 </div>
 
                 <div className="bid-strength-list">
                   {intelligence.strengths.map(
                     (strength) => (
-                      <article key={strength.strength_id}>
+                      <article
+                        key={strength.strength_id}
+                      >
                         <CheckCircle2 size={15} />
 
                         <div>
-                          <strong>{strength.title}</strong>
-                          <p>{strength.description}</p>
+                          <strong>
+                            {strength.title}
+                          </strong>
+
+                          <p>
+                            {strength.description}
+                          </p>
 
                           {strength.evidence_ids.length > 0 && (
                             <div className="bid-evidence-links">
                               {strength.evidence_ids.map(
                                 (evidenceId) => (
-                                  <span key={evidenceId}>
+                                  <span
+                                    key={evidenceId}
+                                  >
                                     {evidenceId}
                                   </span>
                                 ),
@@ -581,15 +695,23 @@ export default function BidIntelligence({
               <section className="bid-side-card">
                 <div className="bid-side-heading">
                   <Bot size={18} />
+
                   <div>
                     <span>AGENT CHAIN</span>
-                    <h3>How this decision was produced</h3>
+
+                    <h3>
+                      How this decision was produced
+                    </h3>
                   </div>
                 </div>
 
                 <div className="bid-chain">
                   <div>
-                    <span className="bid-chain-status complete">
+                    <span
+                      className={
+                        "bid-chain-status complete"
+                      }
+                    >
                       <CheckCircle2 size={13} />
                     </span>
 
@@ -614,7 +736,11 @@ export default function BidIntelligence({
                   <span className="bid-chain-line" />
 
                   <div>
-                    <span className="bid-chain-status active">
+                    <span
+                      className={
+                        "bid-chain-status active"
+                      }
+                    >
                       <Bot size={13} />
                     </span>
 
@@ -639,53 +765,87 @@ export default function BidIntelligence({
                   <span className="bid-chain-line" />
 
                   <div>
-                    <span className="bid-chain-status locked">
+                    <span
+                      className={
+                        "bid-chain-status locked"
+                      }
+                    >
                       <LockKeyhole size={13} />
                     </span>
 
                     <div>
-                      <strong>Human Investment Gate</strong>
+                      <strong>
+                        Human Investment Gate
+                      </strong>
+
                       <p>
-                        Consequential Bid / No-Bid approval
+                        Consequential Bid / No-Bid
+                        approval
                       </p>
                     </div>
                   </div>
                 </div>
               </section>
 
-              <section className="bid-side-card bid-governance-card">
+              <section
+                className={
+                  "bid-side-card bid-governance-card"
+                }
+              >
                 <div className="bid-side-heading">
                   <ShieldAlert size={18} />
+
                   <div>
                     <span>GOVERNANCE</span>
-                    <h3>Agent authority boundary</h3>
+
+                    <h3>
+                      Agent authority boundary
+                    </h3>
                   </div>
                 </div>
 
                 <p>
-                  {intelligence.governance.recommendation_policy}
+                  {
+                    intelligence.governance
+                      .recommendation_policy
+                  }
                 </p>
 
                 <p>
-                  {intelligence.governance.calculation_policy}
+                  {
+                    intelligence.governance
+                      .calculation_policy
+                  }
                 </p>
 
                 <div className="bid-governance-lock">
                   <LockKeyhole size={16} />
+
                   <strong>
-                    {intelligence.governance.approval_policy}
+                    {
+                      intelligence.governance
+                        .approval_policy
+                    }
                   </strong>
                 </div>
               </section>
 
-              <section className="bid-side-card bid-decision-gate">
+              <section
+                className={
+                  "bid-side-card bid-decision-gate"
+                }
+              >
                 <span>EXECUTIVE DECISION</span>
-                <h3>Bid / No-Bid approval</h3>
+
+                <h3>
+                  Bid / No-Bid approval
+                </h3>
 
                 <p>
-                  The system has completed its recommendation.
-                  Approval remains intentionally outside the
-                  agent's authority.
+                  The system has completed its
+                  recommendation. Approval remains
+                  intentionally outside the agent's
+                  authority.
                 </p>
 
                 <button
@@ -706,11 +866,14 @@ export default function BidIntelligence({
           <footer className="bid-footer">
             <div>
               <AlertTriangle size={14} />
-              <span>{intelligence.data_notice}</span>
+
+              <span>
+                {intelligence.data_notice}
+              </span>
             </div>
 
             <span>
-              Decision ID · {intelligence.decision_id}
+              Project · {intelligence.project_id}
             </span>
           </footer>
         </main>
