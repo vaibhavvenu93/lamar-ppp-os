@@ -8,6 +8,7 @@ DEMO ENVIRONMENT:
 Public-information-inspired context and synthetic project data only.
 """
 
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -40,6 +41,9 @@ from lamar_os.api.scenario import (
     ScenarioRequest,
     ScenarioResponse,
 )
+from lamar_os.engines.bid_agent import (
+    run_water_ppp_bid_agent,
+)
 from lamar_os.engines.executive_engine import (
     build_executive_brief,
 )
@@ -55,7 +59,7 @@ app = FastAPI(
         "Experimental AI-native operating system for PPP "
         "infrastructure intelligence."
     ),
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
@@ -78,7 +82,7 @@ def root() -> dict:
 
     return {
         "product": "Lamar PPP OS",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "environment": "DEMO",
         "data_policy": (
             "Public context and synthetic project data only."
@@ -242,6 +246,124 @@ def investigate_opportunity_documents(
         analysis=analysis,
         agent_run=agent_run,
     )
+
+
+@app.post(
+    "/api/opportunities/{opportunity_id}/evaluate-bid",
+)
+def evaluate_bid(
+    opportunity_id: str,
+) -> dict:
+    """
+    Execute the deterministic Bid Agent for a supported opportunity.
+
+    The Bid Agent reasons over structured opportunity and tender
+    intelligence to produce a pursuit recommendation, readiness
+    score, strengths, blockers, quantified exposures and required
+    workstreams.
+
+    The recommendation is advisory only. The system cannot approve
+    its own Bid / No-Bid recommendation.
+    """
+
+    try:
+        opportunity = opportunity_by_id(
+            opportunity_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    if opportunity.opportunity_id != "OPP-WATER-001":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Bid Intelligence is currently implemented "
+                "for the synthetic Eastern Province Independent "
+                "Water Project demo opportunity only."
+            ),
+        )
+
+    analysis, _, document_agent_run = (
+        run_document_workflow()
+    )
+
+    if analysis.opportunity_id != opportunity.opportunity_id:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document Agent analysis does not match the "
+                "requested opportunity."
+            ),
+        )
+
+    decision = run_water_ppp_bid_agent(
+        opportunity_id=opportunity.opportunity_id,
+        project_id=analysis.project_id,
+    )
+
+    response = asdict(decision)
+
+    response["blocking_issue_count"] = (
+        decision.blocking_issue_count
+    )
+    response["critical_issue_count"] = (
+        decision.critical_issue_count
+    )
+    response["total_estimated_exposure_usd"] = (
+        decision.total_estimated_exposure_usd
+    )
+    response["can_auto_approve"] = (
+        decision.can_auto_approve
+    )
+
+    response["agent_chain"] = {
+        "document_agent": {
+            "run_id": document_agent_run.run_id,
+            "agent_name": document_agent_run.agent_name,
+            "status": document_agent_run.status,
+            "evidence_count": len(
+                document_agent_run.evidence_ids
+            ),
+        },
+        "bid_agent": {
+            "agent_name": "Bid Agent",
+            "mode": "DETERMINISTIC",
+            "status": "COMPLETED",
+            "recommendation": (
+                decision.recommendation.value
+            ),
+            "human_approval_required": (
+                decision.human_approval_required
+            ),
+        },
+    }
+
+    response["governance"] = {
+        "recommendation_policy": (
+            "The Bid Agent may recommend pursuit actions."
+        ),
+        "approval_policy": (
+            "Bid / No-Bid approval remains with a human."
+        ),
+        "calculation_policy": (
+            "Readiness scoring and decision gates are "
+            "deterministic and inspectable."
+        ),
+        "evidence_policy": (
+            "Material conclusions preserve source evidence "
+            "references from Document Intelligence."
+        ),
+    }
+
+    response["data_notice"] = (
+        "DEMO ENVIRONMENT — PUBLIC INFORMATION + "
+        "SYNTHETIC PROJECT DATA. NOT LAMAR INTERNAL DATA."
+    )
+
+    return response
 
 
 @app.get("/api/executive-brief")
