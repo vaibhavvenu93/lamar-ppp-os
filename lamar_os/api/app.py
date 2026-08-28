@@ -8,7 +8,11 @@ DEMO ENVIRONMENT:
 Public-information-inspired context and synthetic project data only.
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from demo.executive_brief import build_demo_signals
 from lamar_os.engines.executive_engine import (
@@ -24,6 +28,19 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+FRONTEND_ASSETS = FRONTEND_DIST / "assets"
+
+
+if FRONTEND_ASSETS.exists():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=FRONTEND_ASSETS),
+        name="frontend-assets",
+    )
 
 
 @app.get("/")
@@ -141,3 +158,26 @@ def executive_brief() -> dict:
             ),
         },
     }
+
+
+@app.get("/app")
+def dashboard():
+    """
+    Serve the Lamar PPP OS executive interface.
+
+    The frontend is available after the React production build
+    has generated frontend/dist.
+    """
+
+    index_file = FRONTEND_DIST / "index.html"
+
+    if not index_file.exists():
+        return {
+            "status": "frontend_not_built",
+            "message": (
+                "Build the React frontend before serving "
+                "the Lamar OS dashboard."
+            ),
+        }
+
+    return FileResponse(index_file)
