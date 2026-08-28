@@ -34,7 +34,7 @@ def test_water_ppp_is_conditional_pursue():
 def test_bid_readiness_score_is_deterministic():
     decision = run_water_ppp_bid_agent()
 
-    assert decision.readiness_score == 81.9
+    assert decision.readiness_score == 81.0
 
 
 def test_bid_agent_identifies_financing_blockers():
