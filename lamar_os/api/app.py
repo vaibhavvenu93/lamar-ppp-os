@@ -257,10 +257,14 @@ def evaluate_bid(
     """
     Execute the deterministic Bid Agent for a supported opportunity.
 
-    The Bid Agent reasons over structured opportunity and tender
-    intelligence to produce a pursuit recommendation, readiness
-    score, strengths, blockers, quantified exposures and required
-    workstreams.
+    The Document Agent first structures the synthetic tender package
+    and writes its outputs into a Project Brain. The same Project
+    Brain instance is then supplied to the Bid Agent.
+
+    The Bid Agent reasons over that structured intelligence, produces
+    a pursuit recommendation, and persists its issues, workstreams,
+    recommendation, evidence relationships and execution history into
+    the same shared project state.
 
     The recommendation is advisory only. The system cannot approve
     its own Bid / No-Bid recommendation.
@@ -286,7 +290,7 @@ def evaluate_bid(
             ),
         )
 
-    analysis, _, document_agent_run = (
+    analysis, project_brain, document_agent_run = (
         run_document_workflow()
     )
 
@@ -299,10 +303,37 @@ def evaluate_bid(
             ),
         )
 
+    if project_brain.project_id != analysis.project_id:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document Agent Project Brain does not match "
+                "the analyzed project."
+            ),
+        )
+
     decision = run_water_ppp_bid_agent(
         opportunity_id=opportunity.opportunity_id,
         project_id=analysis.project_id,
+        project_brain=project_brain,
     )
+
+    bid_agent_runs = (
+        project_brain.runs_by_agent(
+            "Bid Agent"
+        )
+    )
+
+    if not bid_agent_runs:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Bid Agent completed without recording its "
+                "execution in the Project Brain."
+            ),
+        )
+
+    bid_agent_run = bid_agent_runs[-1]
 
     response = asdict(decision)
 
@@ -329,16 +360,38 @@ def evaluate_bid(
             ),
         },
         "bid_agent": {
-            "agent_name": "Bid Agent",
+            "run_id": bid_agent_run.run_id,
+            "agent_name": bid_agent_run.agent_name,
             "mode": "DETERMINISTIC",
-            "status": "COMPLETED",
+            "status": bid_agent_run.status,
             "recommendation": (
                 decision.recommendation.value
             ),
             "human_approval_required": (
                 decision.human_approval_required
             ),
+            "output_record_count": len(
+                bid_agent_run.output_record_ids
+            ),
         },
+    }
+
+    response["project_brain"] = {
+        "snapshot": project_brain.snapshot(),
+        "bid_issue_ids": [
+            issue.issue_id
+            for issue in decision.issues
+        ],
+        "workstream_ids": [
+            workstream.workstream_id
+            for workstream in decision.workstreams
+        ],
+        "decision_record_id": (
+            f"BID-DECISION-{decision.opportunity_id}"
+        ),
+        "bid_agent_output_record_ids": list(
+            bid_agent_run.output_record_ids
+        ),
     }
 
     response["governance"] = {
@@ -355,6 +408,10 @@ def evaluate_bid(
         "evidence_policy": (
             "Material conclusions preserve source evidence "
             "references from Document Intelligence."
+        ),
+        "state_policy": (
+            "Document and Bid Agent outputs are written into "
+            "the same traceable Project Brain state."
         ),
     }
 
