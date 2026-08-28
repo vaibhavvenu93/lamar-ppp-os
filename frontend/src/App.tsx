@@ -24,6 +24,7 @@ import {
   ExecutiveBriefResponse,
   getExecutiveBrief,
 } from "./api";
+import FinancialTwin from "./FinancialTwin";
 
 
 const lifecycle = [
@@ -116,8 +117,10 @@ function priorityClass(
 
 function SignalCard({
   item,
+  onRunScenario,
 }: {
   item: ExecutiveBriefItem;
+  onRunScenario: () => void;
 }) {
   return (
     <article
@@ -273,7 +276,10 @@ function SignalCard({
                 <ArrowRight size={15} />
               </button>
 
-              <button className="secondary-button">
+              <button
+                className="secondary-button"
+                onClick={onRunScenario}
+              >
                 Run scenario
               </button>
 
@@ -326,6 +332,11 @@ function App() {
     error,
     setError,
   ] = useState<string | null>(null);
+
+  const [
+    financialTwinOpen,
+    setFinancialTwinOpen,
+  ] = useState(false);
 
   useEffect(() => {
     getExecutiveBrief()
@@ -388,6 +399,15 @@ function App() {
                     : "nav-item"
                 }
                 key={module.label}
+                onClick={
+                  module.label ===
+                  "Financial Twin"
+                    ? () =>
+                        setFinancialTwinOpen(
+                          true,
+                        )
+                    : undefined
+                }
               >
                 <Icon
                   size={17}
@@ -546,11 +566,11 @@ function App() {
               </span>
 
               <strong className="healthy">
-                40
+                ONLINE
               </strong>
 
               <span>
-                automated tests passing
+                deterministic engines
               </span>
             </div>
           </div>
@@ -607,7 +627,12 @@ function App() {
 
           {items.length > 0 && (
             <>
-              <SignalCard item={items[0]} />
+              <SignalCard
+                item={items[0]}
+                onRunScenario={() =>
+                  setFinancialTwinOpen(true)
+                }
+              />
 
               <div className="secondary-signals">
                 {items
@@ -616,6 +641,11 @@ function App() {
                     <SignalCard
                       item={item}
                       key={item.signal_id}
+                      onRunScenario={() =>
+                        setFinancialTwinOpen(
+                          true,
+                        )
+                      }
                     />
                   ))}
               </div>
@@ -667,7 +697,12 @@ function App() {
                   assumption, and rerun it.
                 </p>
 
-                <button className="text-button">
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    setFinancialTwinOpen(true)
+                  }
+                >
                   Explore how this works
                   <ArrowRight size={14} />
                 </button>
@@ -689,6 +724,14 @@ function App() {
           </footer>
         </section>
       </main>
+
+      {financialTwinOpen && (
+        <FinancialTwin
+          onClose={() =>
+            setFinancialTwinOpen(false)
+          }
+        />
+      )}
     </div>
   );
 }
