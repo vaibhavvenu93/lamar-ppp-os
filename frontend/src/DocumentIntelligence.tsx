@@ -28,6 +28,8 @@ import {
   investigateOpportunity,
 } from "./api";
 
+import "./document-intelligence.css";
+
 
 type DocumentIntelligenceProps = {
   opportunityId: string;
