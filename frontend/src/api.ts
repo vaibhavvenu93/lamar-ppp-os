@@ -70,6 +70,119 @@ export type ScenarioResponse = {
 };
 
 
+export type OpportunityScoreComponent = {
+  name: string;
+  score: number;
+  weight: number;
+  weighted_score: number;
+  rationale: string;
+  evidence: string | null;
+};
+
+
+export type OpportunityAssessment = {
+  overall_score: number;
+  priority: string;
+  recommendation: string;
+  recommendation_reason: string;
+
+  strategic_fit: number;
+  sector_fit: number;
+  market_fit: number;
+  delivery_fit: number;
+  financing_fit: number;
+  consortium_readiness: number;
+  competitive_position: number;
+
+  strengths: string[];
+  concerns: string[];
+
+  components: OpportunityScoreComponent[];
+
+  human_decision_required: boolean;
+};
+
+
+export type OpportunitySummary = {
+  opportunity_id: string;
+  name: string;
+  country: string;
+  sector: string;
+  authority: string;
+
+  procurement_model: string;
+  status: string;
+
+  estimated_capex_usd: number | null;
+  concession_years: number | null;
+  submission_deadline: string | null;
+
+  strategic_theme: string | null;
+  project_location: string | null;
+
+  overall_score: number | null;
+  priority: string | null;
+  recommendation: string | null;
+
+  known_risk_count: number;
+  known_requirement_count: number;
+
+  is_demo: boolean;
+  data_classification: string;
+};
+
+
+export type OpportunityDetail = {
+  opportunity_id: string;
+  name: string;
+  country: string;
+  sector: string;
+  authority: string;
+
+  description: string | null;
+
+  procurement_model: string;
+  status: string;
+
+  estimated_capex_usd: number | null;
+  concession_years: number | null;
+  submission_deadline: string | null;
+
+  expected_revenue_model: string | null;
+  project_location: string | null;
+  strategic_theme: string | null;
+
+  consortium_required: boolean;
+  financing_required: boolean;
+
+  known_requirements: string[];
+  known_risks: string[];
+  tags: string[];
+
+  assessment: OpportunityAssessment | null;
+
+  data_notice: string;
+  human_bid_decision_required: boolean;
+};
+
+
+export type OpportunityPortfolioResponse = {
+  product: string;
+  module: string;
+
+  opportunity_count: number;
+  total_pipeline_capex_usd: number;
+
+  strategic_count: number;
+  high_priority_count: number;
+
+  opportunities: OpportunitySummary[];
+
+  scoring_policy: string;
+  data_notice: string;
+};
+
+
 export async function getExecutiveBrief():
   Promise<ExecutiveBriefResponse> {
   const response = await fetch(
@@ -105,6 +218,41 @@ export async function runFinancialScenario(
   if (!response.ok) {
     throw new Error(
       `Financial Twin request failed: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function getOpportunities():
+  Promise<OpportunityPortfolioResponse> {
+  const response = await fetch(
+    "/api/opportunities"
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Opportunity Radar request failed: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function getOpportunity(
+  opportunityId: string,
+): Promise<OpportunityDetail> {
+  const response = await fetch(
+    `/api/opportunities/${encodeURIComponent(
+      opportunityId
+    )}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Opportunity investigation request failed: ${response.status}`
     );
   }
 
