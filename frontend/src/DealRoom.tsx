@@ -13,10 +13,12 @@ import {
   Workflow,
   X,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type {
   ProjectBrainAgentRun,
   ProjectBrainRecord,
+  ProjectBrainRelationship,
   ProjectBrainResponse,
 } from "./api";
 
@@ -29,7 +31,9 @@ type DealRoomProps = {
 };
 
 
-function humanize(value: string | null | undefined) {
+function humanize(
+  value: string | null | undefined,
+) {
   if (!value) {
     return "—";
   }
@@ -168,11 +172,29 @@ function AgentCard({
 
 function RecordCard({
   record,
+  selected,
+  connected,
+  onSelect,
 }: {
   record: ProjectBrainRecord;
+  selected: boolean;
+  connected: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <article className="deal-record-card">
+    <button
+      className={[
+        "deal-record-card",
+        "deal-record-button",
+        selected ? "selected" : "",
+        connected ? "connected" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+    >
       <div className="deal-record-topline">
         <span className="deal-record-type">
           {recordIcon(record.record_type)}
@@ -223,6 +245,61 @@ function RecordCard({
           {humanize(record.approval_status)}
         </span>
       </div>
+    </button>
+  );
+}
+
+
+function RelationshipStep({
+  relationship,
+  recordsById,
+  selectedRecordId,
+}: {
+  relationship: ProjectBrainRelationship;
+  recordsById: Map<string, ProjectBrainRecord>;
+  selectedRecordId: string;
+}) {
+  const source = recordsById.get(
+    relationship.source_record_id,
+  );
+
+  const target = recordsById.get(
+    relationship.target_record_id,
+  );
+
+  const otherRecord =
+    relationship.source_record_id
+      === selectedRecordId
+      ? target
+      : source;
+
+  if (!otherRecord) {
+    return null;
+  }
+
+  return (
+    <article className="deal-causal-step">
+      <div className="deal-causal-step-icon">
+        {recordIcon(otherRecord.record_type)}
+      </div>
+
+      <div className="deal-causal-step-copy">
+        <span>
+          {recordTypeLabel(
+            otherRecord.record_type,
+          )}
+        </span>
+
+        <strong>{otherRecord.title}</strong>
+
+        <small>
+          {humanize(
+            relationship.relationship,
+          )}
+        </small>
+      </div>
+
+      <ChevronRight size={17} />
     </article>
   );
 }
@@ -242,6 +319,74 @@ export default function DealRoom({
     pending_approval_ids: pendingApprovalIds,
   } = intelligence;
 
+  const [
+    selectedRecordId,
+    setSelectedRecordId,
+  ] = useState<string | null>(null);
+
+  const recordsById = useMemo(
+    () =>
+      new Map(
+        records.map((record) => [
+          record.record_id,
+          record,
+        ]),
+      ),
+    [records],
+  );
+
+  const selectedRecord = selectedRecordId
+    ? recordsById.get(selectedRecordId) ?? null
+    : null;
+
+  const selectedRelationships = useMemo(
+    () => {
+      if (!selectedRecordId) {
+        return [];
+      }
+
+      return relationships.filter(
+        (relationship) =>
+          relationship.source_record_id
+            === selectedRecordId
+          || relationship.target_record_id
+            === selectedRecordId,
+      );
+    },
+    [
+      relationships,
+      selectedRecordId,
+    ],
+  );
+
+  const connectedRecordIds = useMemo(
+    () => {
+      const ids = new Set<string>();
+
+      for (
+        const relationship
+        of selectedRelationships
+      ) {
+        ids.add(
+          relationship.source_record_id,
+        );
+        ids.add(
+          relationship.target_record_id,
+        );
+      }
+
+      if (selectedRecordId) {
+        ids.delete(selectedRecordId);
+      }
+
+      return ids;
+    },
+    [
+      selectedRelationships,
+      selectedRecordId,
+    ],
+  );
+
   const bidRecords = records.filter(
     (record) =>
       record.tags.includes("bid")
@@ -256,9 +401,22 @@ export default function DealRoom({
       )
   );
 
-  const visibleBidRecords = bidRecords.slice(0, 8);
+  const visibleBidRecords =
+    bidRecords.slice(0, 8);
+
   const visibleDocumentRecords =
     documentRecords.slice(0, 8);
+
+  function selectRecord(
+    recordId: string,
+  ) {
+    setSelectedRecordId(
+      (current) =>
+        current === recordId
+          ? null
+          : recordId,
+    );
+  }
 
   return (
     <div className="deal-overlay">
@@ -280,7 +438,9 @@ export default function DealRoom({
 
             <div>
               <strong>Lamar PPP OS</strong>
-              <span>Project Brain · Deal Room</span>
+              <span>
+                Project Brain · Deal Room
+              </span>
             </div>
           </div>
 
@@ -320,6 +480,7 @@ export default function DealRoom({
 
             <div>
               <strong>Project Brain</strong>
+
               <span>
                 {snapshot.record_count} live records
               </span>
@@ -330,7 +491,9 @@ export default function DealRoom({
         <section className="deal-metrics">
           <article>
             <span>Shared Records</span>
-            <strong>{snapshot.record_count}</strong>
+            <strong>
+              {snapshot.record_count}
+            </strong>
             <small>
               Across document and bid intelligence
             </small>
@@ -338,7 +501,9 @@ export default function DealRoom({
 
           <article>
             <span>Evidence Graph</span>
-            <strong>{snapshot.evidence_count}</strong>
+            <strong>
+              {snapshot.evidence_count}
+            </strong>
             <small>
               Traceable source references
             </small>
@@ -346,7 +511,9 @@ export default function DealRoom({
 
           <article>
             <span>Agent Runs</span>
-            <strong>{snapshot.agent_run_count}</strong>
+            <strong>
+              {snapshot.agent_run_count}
+            </strong>
             <small>
               Inspectable specialist executions
             </small>
@@ -381,42 +548,70 @@ export default function DealRoom({
           </div>
 
           <div className="deal-agent-flow">
-            {agentRuns.map((run, index) => (
-              <div
-                className="deal-agent-flow-item"
-                key={run.run_id}
-              >
-                <AgentCard run={run} />
+            {agentRuns.map(
+              (run, index) => (
+                <div
+                  className={
+                    "deal-agent-flow-item"
+                  }
+                  key={run.run_id}
+                >
+                  <AgentCard run={run} />
 
-                {index < agentRuns.length - 1 && (
-                  <div className="deal-agent-connector">
-                    <ChevronRight size={18} />
-                  </div>
-                )}
-              </div>
-            ))}
+                  {index
+                    < agentRuns.length - 1 && (
+                    <div
+                      className={
+                        "deal-agent-connector"
+                      }
+                    >
+                      <ChevronRight size={18} />
+                    </div>
+                  )}
+                </div>
+              ),
+            )}
 
             <div className="deal-agent-flow-item">
-              <article className="deal-agent-card human">
+              <article
+                className={
+                  "deal-agent-card human"
+                }
+              >
                 <div className="deal-agent-icon">
                   <LockKeyhole size={17} />
                 </div>
 
                 <div className="deal-agent-copy">
-                  <div className="deal-agent-heading">
-                    <strong>Human Decision Gate</strong>
+                  <div
+                    className={
+                      "deal-agent-heading"
+                    }
+                  >
+                    <strong>
+                      Human Decision Gate
+                    </strong>
 
-                    <span className="deal-status-pill locked">
+                    <span
+                      className={
+                        "deal-status-pill locked"
+                      }
+                    >
                       Locked
                     </span>
                   </div>
 
                   <p>
                     Consequential pursuit decisions
-                    require explicit human authorization.
+                    require explicit human
+                    authorization.
                   </p>
 
-                  <div className="deal-agent-stats">
+                  <div
+                    className={
+                      "deal-agent-stats"
+                    }
+                  >
                     <span>
                       {pendingApprovalIds.length}
                       {" "}pending approvals
@@ -450,8 +645,22 @@ export default function DealRoom({
                   <RecordCard
                     key={record.record_id}
                     record={record}
+                    selected={
+                      selectedRecordId
+                        === record.record_id
+                    }
+                    connected={
+                      connectedRecordIds.has(
+                        record.record_id,
+                      )
+                    }
+                    onSelect={() =>
+                      selectRecord(
+                        record.record_id,
+                      )
+                    }
                   />
-                )
+                ),
               )}
             </div>
           </div>
@@ -477,12 +686,235 @@ export default function DealRoom({
                   <RecordCard
                     key={record.record_id}
                     record={record}
+                    selected={
+                      selectedRecordId
+                        === record.record_id
+                    }
+                    connected={
+                      connectedRecordIds.has(
+                        record.record_id,
+                      )
+                    }
+                    onSelect={() =>
+                      selectRecord(
+                        record.record_id,
+                      )
+                    }
                   />
-                )
+                ),
               )}
             </div>
           </div>
         </section>
+
+        {selectedRecord && (
+          <section className="deal-causal-inspector">
+            <div
+              className={
+                "deal-causal-inspector-heading"
+              }
+            >
+              <div>
+                <span className="deal-eyebrow">
+                  Causal trace
+                </span>
+
+                <h2>
+                  Why does this exist?
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedRecordId(null)
+                }
+                aria-label={
+                  "Close causal inspector"
+                }
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="deal-causal-focus">
+              <div
+                className={
+                  "deal-causal-focus-icon"
+                }
+              >
+                {recordIcon(
+                  selectedRecord.record_type,
+                )}
+              </div>
+
+              <div>
+                <span>
+                  {recordTypeLabel(
+                    selectedRecord.record_type,
+                  )}
+                </span>
+
+                <h3>
+                  {selectedRecord.title}
+                </h3>
+
+                {selectedRecord.summary && (
+                  <p>
+                    {selectedRecord.summary}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="deal-causal-metrics">
+              <div>
+                <span>Evidence</span>
+
+                <strong>
+                  {
+                    selectedRecord
+                      .evidence_ids.length
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>Relationships</span>
+
+                <strong>
+                  {
+                    selectedRelationships
+                      .length
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>Source</span>
+
+                <strong>
+                  {humanize(
+                    selectedRecord.source,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>Human status</span>
+
+                <strong>
+                  {humanize(
+                    selectedRecord
+                      .approval_status,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            {selectedRecord.evidence_ids
+              .length > 0 && (
+              <div
+                className={
+                  "deal-causal-evidence"
+                }
+              >
+                <span>
+                  Evidence trail
+                </span>
+
+                <div>
+                  {selectedRecord
+                    .evidence_ids
+                    .map((evidenceId) => (
+                      <strong
+                        key={evidenceId}
+                      >
+                        {evidenceId}
+                      </strong>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            <div className="deal-causal-chain">
+              <div
+                className={
+                  "deal-causal-chain-heading"
+                }
+              >
+                <Network size={17} />
+
+                <span>
+                  Connected Project Brain state
+                </span>
+              </div>
+
+              {selectedRelationships.length
+                > 0 ? (
+                <div
+                  className={
+                    "deal-causal-step-list"
+                  }
+                >
+                  {selectedRelationships.map(
+                    (relationship) => (
+                      <RelationshipStep
+                        key={
+                          `${
+                            relationship
+                              .source_record_id
+                          }-${
+                            relationship
+                              .target_record_id
+                          }-${
+                            relationship
+                              .relationship
+                          }`
+                        }
+                        relationship={
+                          relationship
+                        }
+                        recordsById={
+                          recordsById
+                        }
+                        selectedRecordId={
+                          selectedRecord.record_id
+                        }
+                      />
+                    ),
+                  )}
+                </div>
+              ) : (
+                <p
+                  className={
+                    "deal-causal-empty"
+                  }
+                >
+                  This record currently has no
+                  record-to-record relationship in
+                  the Project Brain.
+                </p>
+              )}
+            </div>
+
+            <div className="deal-causal-gate">
+              <LockKeyhole size={18} />
+
+              <div>
+                <span>
+                  HUMAN AUTHORITY BOUNDARY
+                </span>
+
+                <strong>
+                  The system can explain this
+                  recommendation. It cannot authorize
+                  the consequential decision.
+                </strong>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="deal-graph-section">
           <div className="deal-section-heading">
@@ -509,31 +941,48 @@ export default function DealRoom({
                 <article
                   className="deal-relationship"
                   key={
-                    `${relationship.source_record_id}-`
-                    + `${relationship.target_record_id}-`
-                    + relationship.relationship
+                    `${
+                      relationship.source_record_id
+                    }-${
+                      relationship.target_record_id
+                    }-${
+                      relationship.relationship
+                    }`
                   }
                 >
                   <div>
                     <span>FROM</span>
+
                     <strong>
-                      {relationship.source_record_id}
+                      {
+                        relationship
+                          .source_record_id
+                      }
                     </strong>
                   </div>
 
-                  <div className="deal-relationship-arrow">
+                  <div
+                    className={
+                      "deal-relationship-arrow"
+                    }
+                  >
                     <span>
                       {humanize(
-                        relationship.relationship
+                        relationship.relationship,
                       )}
                     </span>
+
                     <ChevronRight size={16} />
                   </div>
 
                   <div>
                     <span>TO</span>
+
                     <strong>
-                      {relationship.target_record_id}
+                      {
+                        relationship
+                          .target_record_id
+                      }
                     </strong>
                   </div>
                 </article>
