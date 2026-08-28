@@ -48,7 +48,7 @@ app = FastAPI(
         "Experimental AI-native operating system for PPP "
         "infrastructure intelligence."
     ),
-    version="0.2.0",
+    version="0.1.0",
 )
 
 
@@ -71,7 +71,7 @@ def root() -> dict:
 
     return {
         "product": "Lamar PPP OS",
-        "version": "0.2.0",
+        "version": "0.1.0",
         "environment": "DEMO",
         "data_policy": (
             "Public context and synthetic project data only."
