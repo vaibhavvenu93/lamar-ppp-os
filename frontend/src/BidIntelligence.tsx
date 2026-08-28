@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
+  BrainCircuit,
   CheckCircle2,
   CircleDollarSign,
   FileSearch,
@@ -15,12 +16,20 @@ import {
   Workflow,
   X,
 } from "lucide-react";
+import { useState } from "react";
+
+import DealRoom from "./DealRoom";
+
+import {
+  getProjectBrain,
+} from "./api";
 
 import type {
   BidFactor,
   BidIntelligenceResponse,
   BidIssue,
   BidWorkstream,
+  ProjectBrainResponse,
 } from "./api";
 
 
@@ -311,6 +320,23 @@ export default function BidIntelligence({
   onBack,
   onClose,
 }: BidIntelligenceProps) {
+  const [
+    projectBrain,
+    setProjectBrain,
+  ] = useState<ProjectBrainResponse | null>(
+    null,
+  );
+
+  const [
+    projectBrainLoading,
+    setProjectBrainLoading,
+  ] = useState(false);
+
+  const [
+    projectBrainError,
+    setProjectBrainError,
+  ] = useState<string | null>(null);
+
   const recommendation = humanize(
     intelligence.recommendation,
   );
@@ -322,6 +348,38 @@ export default function BidIntelligence({
   const readinessBand = scoreBand(
     intelligence.readiness_score,
   );
+
+  async function openDealRoom() {
+    setProjectBrainLoading(true);
+    setProjectBrainError(null);
+
+    try {
+      const response = await getProjectBrain(
+        intelligence.opportunity_id,
+      );
+
+      setProjectBrain(response);
+    } catch (error) {
+      setProjectBrainError(
+        error instanceof Error
+          ? error.message
+          : "Unable to open the Project Brain.",
+      );
+    } finally {
+      setProjectBrainLoading(false);
+    }
+  }
+
+  if (projectBrain) {
+    return (
+      <DealRoom
+        opportunityName={opportunityName}
+        intelligence={projectBrain}
+        onBack={() => setProjectBrain(null)}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <div className="bid-overlay">
@@ -435,6 +493,32 @@ export default function BidIntelligence({
                   <LockKeyhole size={15} />
                 </div>
               </div>
+
+              <div className="bid-deal-room-entry">
+                <button
+                  type="button"
+                  onClick={openDealRoom}
+                  disabled={projectBrainLoading}
+                >
+                  <BrainCircuit size={17} />
+
+                  {projectBrainLoading
+                    ? "Opening Project Brain..."
+                    : "Open Project Brain · Deal Room"}
+                </button>
+
+                <span>
+                  Inspect the shared state behind this
+                  recommendation
+                </span>
+              </div>
+
+              {projectBrainError && (
+                <div className="bid-deal-room-error">
+                  <AlertTriangle size={15} />
+                  {projectBrainError}
+                </div>
+              )}
             </div>
 
             <div className="bid-decision-card">
@@ -817,6 +901,16 @@ export default function BidIntelligence({
                       .calculation_policy
                   }
                 </p>
+
+                {intelligence.governance
+                  .state_policy && (
+                  <p>
+                    {
+                      intelligence.governance
+                        .state_policy
+                    }
+                  </p>
+                )}
 
                 <div className="bid-governance-lock">
                   <LockKeyhole size={16} />
