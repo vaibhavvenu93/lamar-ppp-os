@@ -26,6 +26,7 @@ import {
 } from "./api";
 import BuildWithHani from "./BuildWithHani";
 import FinancialTwin from "./FinancialTwin";
+import OpportunityRadar from "./OpportunityRadar";
 import RiskAnalysis from "./RiskAnalysis";
 
 
@@ -354,6 +355,11 @@ function App() {
   ] = useState<string | null>(null);
 
   const [
+    opportunityRadarOpen,
+    setOpportunityRadarOpen,
+  ] = useState(false);
+
+  const [
     financialTwinOpen,
     setFinancialTwinOpen,
   ] = useState(false);
@@ -395,9 +401,16 @@ function App() {
 
 
   function closeAllPanels() {
+    setOpportunityRadarOpen(false);
     setAnalysisItem(null);
     setFinancialTwinOpen(false);
     setBuildWithHaniOpen(false);
+  }
+
+
+  function openOpportunityRadar() {
+    closeAllPanels();
+    setOpportunityRadarOpen(true);
   }
 
 
@@ -418,6 +431,11 @@ function App() {
   function openBuildWithHani() {
     closeAllPanels();
     setBuildWithHaniOpen(true);
+  }
+
+
+  function closeOpportunityRadar() {
+    setOpportunityRadarOpen(false);
   }
 
 
@@ -478,16 +496,19 @@ function App() {
                 key={module.label}
                 onClick={
                   module.label ===
-                  "Financial Twin"
-                    ? openFinancialTwin
+                  "Opportunity Radar"
+                    ? openOpportunityRadar
                     : module.label ===
-                        "Risk Intelligence" &&
-                      items.length > 0
-                      ? () =>
-                          openAnalysis(
-                            items[0],
-                          )
-                      : undefined
+                        "Financial Twin"
+                      ? openFinancialTwin
+                      : module.label ===
+                          "Risk Intelligence" &&
+                        items.length > 0
+                        ? () =>
+                            openAnalysis(
+                              items[0],
+                            )
+                        : undefined
                 }
               >
                 <Icon
@@ -812,6 +833,12 @@ function App() {
           </footer>
         </section>
       </main>
+
+      {opportunityRadarOpen && (
+        <OpportunityRadar
+          onClose={closeOpportunityRadar}
+        />
+      )}
 
       {analysisItem && (
         <RiskAnalysis
