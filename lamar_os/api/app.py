@@ -14,9 +14,21 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from demo.executive_brief import build_demo_signals
+from demo.executive_brief import (
+    build_demo_project_financials,
+    build_demo_signals,
+)
+from lamar_os.api.scenario import (
+    ScenarioMetrics,
+    ScenarioRequest,
+    ScenarioResponse,
+)
 from lamar_os.engines.executive_engine import (
     build_executive_brief,
+)
+from lamar_os.engines.scenario_engine import (
+    Scenario,
+    run_scenario,
 )
 
 
@@ -158,6 +170,71 @@ def executive_brief() -> dict:
             ),
         },
     }
+
+
+@app.post(
+    "/api/scenario",
+    response_model=ScenarioResponse,
+)
+def financial_scenario(
+    request: ScenarioRequest,
+) -> ScenarioResponse:
+    """
+    Run an interactive PPP Financial Twin scenario.
+
+    User-controlled assumptions are passed into the deterministic
+    scenario and financial engines. No language model performs
+    the financial calculations.
+    """
+
+    assumptions = build_demo_project_financials()
+
+    scenario = Scenario(
+        name=request.name,
+        description=(
+            "Interactive executive scenario submitted "
+            "through the Lamar PPP OS interface."
+        ),
+        capex_change_pct=request.capex_change_pct,
+        revenue_change_pct=request.revenue_change_pct,
+        opex_change_pct=request.opex_change_pct,
+        interest_rate_change_pct=(
+            request.interest_rate_change_pct
+        ),
+    )
+
+    comparison = run_scenario(
+        assumptions=assumptions,
+        scenario=scenario,
+    )
+
+    base = comparison.base_results
+    modeled = comparison.scenario_results
+
+    return ScenarioResponse(
+        scenario_name=scenario.name,
+        base=ScenarioMetrics(
+            equity_irr=base.equity_irr,
+            project_npv_usd=base.project_npv_usd,
+            minimum_dscr=base.minimum_dscr,
+        ),
+        scenario=ScenarioMetrics(
+            equity_irr=modeled.equity_irr,
+            project_npv_usd=(
+                modeled.project_npv_usd
+            ),
+            minimum_dscr=modeled.minimum_dscr,
+        ),
+        equity_irr_change=(
+            comparison.equity_irr_change
+        ),
+        project_npv_change_usd=(
+            comparison.project_npv_change_usd
+        ),
+        minimum_dscr_change=(
+            comparison.minimum_dscr_change
+        ),
+    )
 
 
 @app.get("/app")
