@@ -36,6 +36,10 @@ from lamar_os.api.opportunity import (
     opportunity_detail,
     opportunity_summary,
 )
+from lamar_os.api.project_brain import (
+    ProjectBrainResponse,
+    project_brain_response,
+)
 from lamar_os.api.scenario import (
     ScenarioMetrics,
     ScenarioRequest,
@@ -73,6 +77,92 @@ if FRONTEND_ASSETS.exists():
         "/assets",
         StaticFiles(directory=FRONTEND_ASSETS),
         name="frontend-assets",
+    )
+
+
+def _build_bid_project_brain(
+    opportunity_id: str,
+):
+    """
+    Build connected Document + Bid intelligence for one opportunity.
+
+    Both agents operate on the same Project Brain instance so the
+    resulting state can be inspected by the Deal Room.
+
+    This is deterministic demo workflow state, not database-backed
+    persistence across requests.
+    """
+
+    try:
+        opportunity = opportunity_by_id(
+            opportunity_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    if opportunity.opportunity_id != "OPP-WATER-001":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Connected Project Brain intelligence is currently "
+                "implemented for the synthetic Eastern Province "
+                "Independent Water Project demo opportunity only."
+            ),
+        )
+
+    analysis, project_brain, document_agent_run = (
+        run_document_workflow()
+    )
+
+    if analysis.opportunity_id != opportunity.opportunity_id:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document Agent analysis does not match the "
+                "requested opportunity."
+            ),
+        )
+
+    if project_brain.project_id != analysis.project_id:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Document Agent Project Brain does not match "
+                "the analyzed project."
+            ),
+        )
+
+    decision = run_water_ppp_bid_agent(
+        opportunity_id=opportunity.opportunity_id,
+        project_id=analysis.project_id,
+        project_brain=project_brain,
+    )
+
+    bid_agent_runs = project_brain.runs_by_agent(
+        "Bid Agent"
+    )
+
+    if not bid_agent_runs:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Bid Agent completed without recording its "
+                "execution in the Project Brain."
+            ),
+        )
+
+    bid_agent_run = bid_agent_runs[-1]
+
+    return (
+        opportunity,
+        analysis,
+        project_brain,
+        document_agent_run,
+        decision,
+        bid_agent_run,
     )
 
 
@@ -270,70 +360,16 @@ def evaluate_bid(
     its own Bid / No-Bid recommendation.
     """
 
-    try:
-        opportunity = opportunity_by_id(
-            opportunity_id
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=str(exc),
-        ) from exc
-
-    if opportunity.opportunity_id != "OPP-WATER-001":
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Bid Intelligence is currently implemented "
-                "for the synthetic Eastern Province Independent "
-                "Water Project demo opportunity only."
-            ),
-        )
-
-    analysis, project_brain, document_agent_run = (
-        run_document_workflow()
+    (
+        opportunity,
+        analysis,
+        project_brain,
+        document_agent_run,
+        decision,
+        bid_agent_run,
+    ) = _build_bid_project_brain(
+        opportunity_id
     )
-
-    if analysis.opportunity_id != opportunity.opportunity_id:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Document Agent analysis does not match the "
-                "requested opportunity."
-            ),
-        )
-
-    if project_brain.project_id != analysis.project_id:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Document Agent Project Brain does not match "
-                "the analyzed project."
-            ),
-        )
-
-    decision = run_water_ppp_bid_agent(
-        opportunity_id=opportunity.opportunity_id,
-        project_id=analysis.project_id,
-        project_brain=project_brain,
-    )
-
-    bid_agent_runs = (
-        project_brain.runs_by_agent(
-            "Bid Agent"
-        )
-    )
-
-    if not bid_agent_runs:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Bid Agent completed without recording its "
-                "execution in the Project Brain."
-            ),
-        )
-
-    bid_agent_run = bid_agent_runs[-1]
 
     response = asdict(decision)
 
@@ -421,6 +457,48 @@ def evaluate_bid(
     )
 
     return response
+
+
+@app.get(
+    "/api/opportunities/{opportunity_id}/project-brain",
+    response_model=ProjectBrainResponse,
+)
+def opportunity_project_brain(
+    opportunity_id: str,
+) -> ProjectBrainResponse:
+    """
+    Return the connected Project Brain for the Deal Room.
+
+    The endpoint reconstructs the current deterministic demo workflow:
+
+    Document Agent
+        -> shared Project Brain
+        -> Bid Agent
+        -> shared Project Brain
+        -> Deal Room API contract
+
+    The returned state includes traceable project records, cross-record
+    relationships, agent execution history and pending human gates.
+
+    This prototype currently reconstructs deterministic workflow state
+    per request. It does not claim database persistence across server
+    restarts or independent requests.
+    """
+
+    (
+        _,
+        _,
+        project_brain,
+        _,
+        _,
+        _,
+    ) = _build_bid_project_brain(
+        opportunity_id
+    )
+
+    return project_brain_response(
+        project_brain
+    )
 
 
 @app.get("/api/executive-brief")
