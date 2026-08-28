@@ -10,13 +10,23 @@ Public-information-inspired context and synthetic project data only.
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from demo.executive_brief import (
     build_demo_project_financials,
     build_demo_signals,
+)
+from demo.opportunities import (
+    build_demo_opportunities,
+    opportunity_by_id,
+)
+from lamar_os.api.opportunity import (
+    OpportunityDetailResponse,
+    OpportunityPortfolioResponse,
+    opportunity_detail,
+    opportunity_summary,
 )
 from lamar_os.api.scenario import (
     ScenarioMetrics,
@@ -38,7 +48,7 @@ app = FastAPI(
         "Experimental AI-native operating system for PPP "
         "infrastructure intelligence."
     ),
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
@@ -61,7 +71,7 @@ def root() -> dict:
 
     return {
         "product": "Lamar PPP OS",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "environment": "DEMO",
         "data_policy": (
             "Public context and synthetic project data only."
@@ -81,6 +91,93 @@ def health() -> dict:
         "status": "healthy",
         "service": "lamar-ppp-os",
     }
+
+
+@app.get(
+    "/api/opportunities",
+    response_model=OpportunityPortfolioResponse,
+)
+def opportunity_portfolio() -> OpportunityPortfolioResponse:
+    """
+    Return the Phase 2 Opportunity Radar portfolio.
+
+    Opportunities are synthetic demonstration records scored by the
+    deterministic opportunity engine. The endpoint exposes pipeline
+    prioritization without making a Bid / No-Bid decision.
+    """
+
+    opportunities = build_demo_opportunities()
+
+    summaries = [
+        opportunity_summary(opportunity)
+        for opportunity in opportunities
+    ]
+
+    summaries.sort(
+        key=lambda opportunity: (
+            opportunity.overall_score
+            if opportunity.overall_score is not None
+            else -1
+        ),
+        reverse=True,
+    )
+
+    total_pipeline_capex_usd = sum(
+        opportunity.estimated_capex_usd or 0
+        for opportunity in opportunities
+    )
+
+    strategic_count = sum(
+        1
+        for opportunity in summaries
+        if opportunity.priority == "STRATEGIC"
+    )
+
+    high_priority_count = sum(
+        1
+        for opportunity in summaries
+        if opportunity.priority == "HIGH"
+    )
+
+    return OpportunityPortfolioResponse(
+        opportunity_count=len(summaries),
+        total_pipeline_capex_usd=(
+            total_pipeline_capex_usd
+        ),
+        strategic_count=strategic_count,
+        high_priority_count=high_priority_count,
+        opportunities=summaries,
+    )
+
+
+@app.get(
+    "/api/opportunities/{opportunity_id}",
+    response_model=OpportunityDetailResponse,
+)
+def opportunity_investigation(
+    opportunity_id: str,
+) -> OpportunityDetailResponse:
+    """
+    Return the investigation view for one opportunity.
+
+    The detailed response includes opportunity facts, known
+    requirements, known risks, scoring dimensions, strengths,
+    concerns, provenance boundaries, and the human decision gate.
+    """
+
+    try:
+        opportunity = opportunity_by_id(
+            opportunity_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    return opportunity_detail(
+        opportunity
+    )
 
 
 @app.get("/api/executive-brief")
