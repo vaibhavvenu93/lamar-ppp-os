@@ -29,3 +29,7 @@ jobs:
       - name: Run Lamar OS tests
         run: |
           pytest -v
+
+      - name: Run Lamar Executive Brief demo
+        run: |
+          python -m demo.executive_brief
